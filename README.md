@@ -1,3 +1,3 @@
 # About This Project
-This a in development of a software rendered gaming engine \
+This is a in-development software rendered gaming engine \
 
