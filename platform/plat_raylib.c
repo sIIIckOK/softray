@@ -33,6 +33,7 @@ int main(int argc, char** argv) {
         1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
     };
     Texture2D tex = LoadTextureFromImage(img);
+    game_update(&s);
 
     while(!WindowShouldClose()) {
         BeginDrawing();

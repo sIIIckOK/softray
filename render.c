@@ -46,6 +46,7 @@ static inline uint32_t screen_get_color_at(const Screen* screen, int x, int y) {
     if (x < screen->width && y < screen->height) {
         return screen->pixels[x + y * screen->width];
     }
+    return 0;
 }
 
 void screen_draw_rect(Screen* screen, 
@@ -74,5 +75,90 @@ void screen_draw_circle(Screen* screen,
         }
     }
 }
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))   
+#define MAX(a, b) ((a) > (b) ? (a) : (b))   
+
+void screen_draw_line_naive(Screen* screen, 
+                      int start_x, int start_y, 
+                      int end_x, int end_y,
+                      uint32_t color) 
+{
+    int min_x = MIN(start_x, end_x);
+    int max_x = MAX(start_x, end_x);
+    int min_y = MIN(start_y, end_y);
+    int max_y = MAX(start_y, end_y);
+
+    int del_x = max_x - min_x;
+    int del_y = max_y - min_y;
+
+    float slope = 1;
+    if (del_x != 0) slope = (float)del_y/del_x;
+    float b = min_y - slope * min_x;
+
+    for (int y = min_y; y < max_y; y++) {
+        for (int x = min_x; x < max_x; x++) {
+            float eqn = slope*x + b;
+            if (y >= eqn - 1 && 
+                y <= eqn + 1) {
+                screen_draw_pixel(screen, x, y, color);
+            }
+        }
+    }
+}
+
+void screen_draw_line(Screen* screen, 
+                      int start_x, int start_y, 
+                      int end_x, int end_y,
+                      uint32_t color) 
+{
+    int min_x = MIN(start_x, end_x);
+    int max_x = MAX(start_x, end_x);
+    int min_y = MIN(start_y, end_y);
+    int max_y = MAX(start_y, end_y);
+
+    int dx = max_x - min_x;
+    int dy = max_y - min_y;
+    int D = 2*dy - dx;
+    int y = min_y;
+
+    for (int x = min_x; x < max_x; x++) {
+        screen_draw_pixel(screen, x, y, color);
+        if (D > 0) {
+            y = y + 1;
+            D = D + (2 * (dy - dx));
+        } else {
+            D = D + 2*dy;
+        }
+    }
+}
+void screen_draw_line_thickness(Screen* screen, 
+                      int start_x, int start_y, 
+                      int end_x, int end_y,
+                      int thickness,
+                      uint32_t color) 
+{
+    int min_x = MIN(start_x, end_x);
+    int max_x = MAX(start_x, end_x);
+    int min_y = MIN(start_y, end_y);
+    int max_y = MAX(start_y, end_y);
+
+    int dx = max_x - min_x;
+    int dy = max_y - min_y;
+    int D = 2*dy - dx;
+    int y = min_y;
+
+    for (int x = min_x; x < max_x; x++) {
+        screen_draw_rect(screen, x, y, thickness, thickness, color);
+        if (D > 0) {
+            y = y + 1;
+            D = D + (2 * (dy - dx));
+        } else {
+            D = D + 2*dy;
+        }
+    }
+}
+
+
 
 

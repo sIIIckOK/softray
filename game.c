@@ -5,7 +5,7 @@
 #define SCREEN_RATIO_X (16)
 #define SCREEN_RATIO_Y (9)
 
-#define SCREEN_FACTOR (10)
+#define SCREEN_FACTOR (100)
 #define SCREEN_WIDTH  (SCREEN_RATIO_X*SCREEN_FACTOR) 
 #define SCREEN_HEIGHT (SCREEN_RATIO_Y*SCREEN_FACTOR)
 
@@ -43,7 +43,19 @@ void screen_print(const Screen* s) {
 }
 
 void game_update(Screen* s) {
-    render_balls(s, 10);
+    // screen_draw_line(s, 0, 0, 100, 100, 0xff00ffff);
+    int padding = 50;
+    int e_x = 0 + padding;
+    int e_y = 0 + padding;
+    int s_x = s->width - padding;
+    int s_y = s->height - padding;
+
+    int point_sz = 4;
+
+    screen_draw_line_thickness(s, s_x, s_y, e_x, e_y, 2, 0xff0000ff);
+
+    screen_draw_rect(s, s_x - point_sz/2, s_y - point_sz/2, point_sz, point_sz, 0xff00ffff);
+    screen_draw_rect(s, e_x - point_sz/2, e_y - point_sz/2, point_sz, point_sz, 0xff00ffff);
 }
 
 
