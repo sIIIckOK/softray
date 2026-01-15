@@ -39,6 +39,11 @@ int main(int argc, char** argv) {
         BeginDrawing();
         game_update(&s);
 
+        if (IsKeyPressed(KEY_H)) {
+            if (!screen_to_ppm(&s, "./frames/line.ppm")) {
+                exit(69);
+            }
+        }
         UpdateTexture(tex, s.pixels);
         DrawTexture(tex, 0, 0, WHITE);
 

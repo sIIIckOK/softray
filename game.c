@@ -56,9 +56,8 @@ void game_update(Screen* s) {
 
     screen_draw_rect(s, s_x - point_sz/2, s_y - point_sz/2, point_sz, point_sz, 0xff00ffff);
     screen_draw_rect(s, e_x - point_sz/2, e_y - point_sz/2, point_sz, point_sz, 0xff00ffff);
+
 }
-
-
 
 
 

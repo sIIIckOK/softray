@@ -24,14 +24,15 @@ bool screen_to_ppm(const Screen* screen, char* outpath) {
     for (int dy = 0; dy < screen->height; dy++) {
         for (int dx = 0; dx < screen->width; dx++) {
             uint32_t p = screen->pixels[dx + dy * screen->width];
-            uint8_t r = p >> 8*2;
+            uint8_t r = p >> 8*0;
             uint8_t g = p >> 8*1;
-            uint8_t b = p >> 8*0;
+            uint8_t b = p >> 8*2;
             fwrite(&r, sizeof(r), 1, f);
             fwrite(&g, sizeof(g), 1, f);
             fwrite(&b, sizeof(b), 1, f);
         }
     }
+    fclose(f);
     printf("INFO: Generated %s\n", outpath);
     return true;
 }
