@@ -6,8 +6,6 @@
 
 #include <stdio.h>
 
-
-
 typedef struct {
     uint32_t* pixels;
     size_t width;
@@ -15,13 +13,13 @@ typedef struct {
 } Screen;
 
 bool screen_to_ppm(const Screen* screen, char* outpath) {
-    FILE* f = fopen(outpath, "w");
+    FILE* f = fopen(outpath, "wb");
     if (!f) {
         return false;
         printf("ERROR: %s\n", strerror(errno));
     } 
     char temp[128] = {0};
-    sprintf(temp, "P6 %zu %zu 255\n", screen->width, screen->height);
+    sprintf(temp, "P6\n%zu %zu\n255\n", screen->width, screen->height);
     fwrite(temp, strlen(temp), 1, f);
     for (int dy = 0; dy < screen->height; dy++) {
         for (int dx = 0; dx < screen->width; dx++) {
@@ -41,6 +39,12 @@ bool screen_to_ppm(const Screen* screen, char* outpath) {
 static inline void screen_draw_pixel(Screen* screen, int x, int y, uint32_t color) {
     if (x < screen->width && y < screen->height) {
         screen->pixels[x + y * screen->width] = color;
+    }
+}
+
+static inline uint32_t screen_get_color_at(const Screen* screen, int x, int y) {
+    if (x < screen->width && y < screen->height) {
+        return screen->pixels[x + y * screen->width];
     }
 }
 
