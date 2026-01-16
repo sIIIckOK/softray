@@ -113,23 +113,26 @@ void screen_draw_line(Screen* screen,
                       int end_x, int end_y,
                       uint32_t color) 
 {
-    int min_x = MIN(start_x, end_x);
-    int max_x = MAX(start_x, end_x);
-    int min_y = MIN(start_y, end_y);
-    int max_y = MAX(start_y, end_y);
-
-    int dx = max_x - min_x;
-    int dy = max_y - min_y;
-    int D = 2*dy - dx;
-    int y = min_y;
-
-    for (int x = min_x; x < max_x; x++) {
+    int x = start_x;
+    int y = start_y;
+    int dx = abs(end_x - start_x);
+    int dy = abs(end_y - start_y);
+    int sx = start_x < end_x ? 1 : -1;
+    int sy = start_y < end_y ? 1 : -1;
+    int err = dx - dy;
+    while (true) {
         screen_draw_pixel(screen, x, y, color);
-        if (D > 0) {
-            y = y + 1;
-            D = D + (2 * (dy - dx));
-        } else {
-            D = D + 2*dy;
+        if (x == end_x && y == end_y) {
+            break;
+        }
+        int e2 = 2 * err;
+        if (e2 > -dy) {
+            err -= dy;
+            x += sx;
+        }
+        if (e2 < dx) {
+            err += dx;
+            y += sy;
         }
     }
 }
@@ -139,23 +142,26 @@ void screen_draw_line_thickness(Screen* screen,
                       int thickness,
                       uint32_t color) 
 {
-    int min_x = MIN(start_x, end_x);
-    int max_x = MAX(start_x, end_x);
-    int min_y = MIN(start_y, end_y);
-    int max_y = MAX(start_y, end_y);
-
-    int dx = max_x - min_x;
-    int dy = max_y - min_y;
-    int D = 2*dy - dx;
-    int y = min_y;
-
-    for (int x = min_x; x < max_x; x++) {
+    int x = start_x;
+    int y = start_y;
+    int dx = abs(end_x - start_x);
+    int dy = abs(end_y - start_y);
+    int sx = start_x < end_x ? 1 : -1;
+    int sy = start_y < end_y ? 1 : -1;
+    int err = dx - dy;
+    while (true) {
         screen_draw_rect(screen, x, y, thickness, thickness, color);
-        if (D > 0) {
-            y = y + 1;
-            D = D + (2 * (dy - dx));
-        } else {
-            D = D + 2*dy;
+        if (x == end_x && y == end_y) {
+            break;
+        }
+        int e2 = 2 * err;
+        if (e2 > -dy) {
+            err -= dy;
+            x += sx;
+        }
+        if (e2 < dx) {
+            err += dx;
+            y += sy;
         }
     }
 }

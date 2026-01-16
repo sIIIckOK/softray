@@ -24,6 +24,7 @@ int main(int argc, char** argv) {
         .width = SCREEN_WIDTH,
         .height = SCREEN_HEIGHT,
     };
+    Game_Struct gs = {0};
     
     InitWindow(s.width, s.height, "Hello");
     SetTargetFPS(60);
@@ -33,17 +34,21 @@ int main(int argc, char** argv) {
         1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
     };
     Texture2D tex = LoadTextureFromImage(img);
-    game_update(&s);
+    game_init(&s, &gs);
 
+    #define FPS 60
+    SetTargetFPS(FPS);
     while(!WindowShouldClose()) {
         BeginDrawing();
-        game_update(&s);
+        gs.dt = (float)1/FPS;
+        game_update(&s, &gs);
 
         if (IsKeyPressed(KEY_H)) {
             if (!screen_to_ppm(&s, "./frames/line.ppm")) {
                 exit(69);
             }
         }
+        DrawFPS(0, 0);
         UpdateTexture(tex, s.pixels);
         DrawTexture(tex, 0, 0, WHITE);
 
