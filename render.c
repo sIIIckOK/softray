@@ -3,8 +3,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include "common.c"
 
 #include <stdio.h>
+
+
+#define NEAR_CLIP_PLANE  (0.1)
+#define FOREGROUND_COLOR (0xff00ff00)
 
 typedef struct {
     uint32_t* pixels;
@@ -33,17 +38,18 @@ bool screen_to_ppm(const Screen* screen, char* outpath) {
         }
     }
     fclose(f);
-    printf("INFO: Generated %s\n", outpath);
+    printf("[INFO] Generated %s\n", outpath);
     return true;
 }
 
-static inline void screen_draw_pixel(Screen* screen, int x, int y, uint32_t color) {
-    if (x < screen->width && y < screen->height) {
+static inline void screen_put_pixel(Screen* screen, int x, int y, uint32_t color) {
+    if (x >= 0 && y >= 0 && 
+        x < screen->width && y < screen->height) {
         screen->pixels[x + y * screen->width] = color;
     }
 }
 
-static inline uint32_t screen_get_color_at(const Screen* screen, int x, int y) {
+static inline uint32_t screen_get_color(const Screen* screen, int x, int y) {
     if (x < screen->width && y < screen->height) {
         return screen->pixels[x + y * screen->width];
     }
@@ -56,7 +62,7 @@ void screen_draw_rect(Screen* screen,
                       uint32_t color) {
     for (int dy = y; dy < y + h; dy++) {
         for (int dx = x; dx < x + w; dx++) {
-            screen_draw_pixel(screen, dx, dy, color);
+            screen_put_pixel(screen, dx, dy, color);
         }
     }
 }
@@ -71,43 +77,13 @@ void screen_draw_circle(Screen* screen,
         for (int dx = x - r; dx < x + r; dx++) {
             int _dx = x - dx;
             if (_dx*_dx + _dy2 <= r*r) {
-                screen_draw_pixel(screen, dx, dy, color);
+                screen_put_pixel(screen, dx, dy, color);
             }
         }
     }
 }
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))   
-#define MAX(a, b) ((a) > (b) ? (a) : (b))   
-
-void screen_draw_line_naive(Screen* screen, 
-                      int start_x, int start_y, 
-                      int end_x, int end_y,
-                      uint32_t color) 
-{
-    int min_x = MIN(start_x, end_x);
-    int max_x = MAX(start_x, end_x);
-    int min_y = MIN(start_y, end_y);
-    int max_y = MAX(start_y, end_y);
-
-    int del_x = max_x - min_x;
-    int del_y = max_y - min_y;
-
-    float slope = 1;
-    if (del_x != 0) slope = (float)del_y/del_x;
-    float b = min_y - slope * min_x;
-
-    for (int y = min_y; y < max_y; y++) {
-        for (int x = min_x; x < max_x; x++) {
-            float eqn = slope*x + b;
-            if (y >= eqn - 1 && 
-                y <= eqn + 1) {
-                screen_draw_pixel(screen, x, y, color);
-            }
-        }
-    }
-}
-
+// Uses Bresenham's Algorithm
 void screen_draw_line(Screen* screen, 
                       int start_x, int start_y, 
                       int end_x, int end_y,
@@ -121,7 +97,7 @@ void screen_draw_line(Screen* screen,
     int sy = start_y < end_y ? 1 : -1;
     int err = dx - dy;
     while (true) {
-        screen_draw_pixel(screen, x, y, color);
+        screen_put_pixel(screen, x, y, color);
         if (x == end_x && y == end_y) {
             break;
         }
@@ -136,6 +112,7 @@ void screen_draw_line(Screen* screen,
         }
     }
 }
+
 void screen_draw_line_thickness(Screen* screen, 
                       int start_x, int start_y, 
                       int end_x, int end_y,
@@ -166,6 +143,18 @@ void screen_draw_line_thickness(Screen* screen,
     }
 }
 
+void screen_print(const Screen* s) {
+    for (int y = 0; y < s->height; y++) {
+        printf("[ ");
+        for (int x = 0; x < s->width; x++) {
+            printf("%x ", screen_get_color(s, x, y));
+        }
+        printf("\b]\n");
+    }
+}
 
+void screen_clear(Screen* s, uint32_t color) {
+    screen_draw_rect(s, 0, 0, s->width, s->height, color);
+}
 
 

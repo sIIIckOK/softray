@@ -27,7 +27,6 @@ int main(int argc, char** argv) {
     Game_Struct gs = {0};
     
     InitWindow(s.width, s.height, "Hello");
-    SetTargetFPS(60);
     Image img = {
         s.pixels,
         s.width, s.height,
@@ -39,16 +38,10 @@ int main(int argc, char** argv) {
     #define FPS 60
     SetTargetFPS(FPS);
     while(!WindowShouldClose()) {
-        BeginDrawing();
         gs.dt = (float)1/FPS;
+        BeginDrawing();
         game_update(&s, &gs);
 
-        if (IsKeyPressed(KEY_H)) {
-            if (!screen_to_ppm(&s, "./frames/line.ppm")) {
-                exit(69);
-            }
-        }
-        DrawFPS(0, 0);
         UpdateTexture(tex, s.pixels);
         DrawTexture(tex, 0, 0, WHITE);
 
