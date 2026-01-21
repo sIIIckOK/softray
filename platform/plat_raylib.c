@@ -1,5 +1,7 @@
 #include "../game.c"
 #include "../include/raylib.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 Texture render_init_screen(Screen* s) {
     Image image = {0};
@@ -90,6 +92,14 @@ int key_translate_table[] = {
     [KEY_RIGHT]         = KEY_CODE_RIGHT,
 };
 
+int mouse_key_translate_translation_table[] = {
+    [MOUSE_BUTTON_LEFT]    = KEY_MOUSE_LEFT,
+    [MOUSE_BUTTON_RIGHT]   = KEY_MOUSE_RIGHT,
+    [MOUSE_BUTTON_FORWARD] = KEY_MOUSE_4,
+    [MOUSE_BUTTON_BACK]    = KEY_MOUSE_5,
+    [MOUSE_BUTTON_MIDDLE]  = KEY_MOUSE_WHEEL,
+};
+
 int key_translate(int key) {
     if (key > ARRAY_SIZE(key_translate_table) || key < 0) {
         return 0;
@@ -98,7 +108,7 @@ int key_translate(int key) {
     return key_translate_table[key];
 }
 
-void key_poll(Core_Data* cd) {
+void keyboard_key_poll(Core_Data* cd) {
     for (int i = 0; i < ARRAY_SIZE(cd->keyboard); i++) {
         cd->keyboard[i].was_pressed = cd->keyboard[i].is_pressed;
         cd->keyboard[i].is_pressed = false;
@@ -110,6 +120,32 @@ void key_poll(Core_Data* cd) {
         cd->keyboard[my_key].is_pressed = true;
         key = GetCharPressed();
     }
+}
+
+void mouse_key_poll(Core_Data* cd) {
+    Vector2 pos = GetMousePosition();
+    Vector2 del = GetMouseDelta();
+
+    cd->mouse.pos.x = pos.x;
+    cd->mouse.pos.y = pos.y;
+
+    cd->mouse.delta.x = del.x;
+    cd->mouse.delta.y = del.y;
+
+    cd->mouse.button[KEY_MOUSE_LEFT].was_pressed = cd->mouse.button[KEY_MOUSE_LEFT].is_pressed;
+    cd->mouse.button[KEY_MOUSE_LEFT].is_pressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) ? true : false;
+
+    cd->mouse.button[KEY_MOUSE_RIGHT].was_pressed = cd->mouse.button[KEY_MOUSE_RIGHT].is_pressed;
+    cd->mouse.button[KEY_MOUSE_RIGHT].is_pressed = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) ? true : false;
+
+    cd->mouse.button[KEY_MOUSE_MIDDLE].was_pressed = cd->mouse.button[KEY_MOUSE_MIDDLE].is_pressed;
+    cd->mouse.button[KEY_MOUSE_MIDDLE].is_pressed = IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE) ? true : false;
+
+    cd->mouse.button[KEY_MOUSE_4].was_pressed = cd->mouse.button[KEY_MOUSE_4].is_pressed;
+    cd->mouse.button[KEY_MOUSE_4].is_pressed = IsMouseButtonPressed(MOUSE_BUTTON_FORWARD) ? true : false;
+
+    cd->mouse.button[KEY_MOUSE_5].was_pressed = cd->mouse.button[KEY_MOUSE_5].is_pressed;
+    cd->mouse.button[KEY_MOUSE_5].is_pressed = IsMouseButtonPressed(MOUSE_BUTTON_BACK) ? true : false;
 }
 
 
@@ -136,7 +172,8 @@ int main(int argc, char** argv) {
     SetTargetFPS(FPS);
     while(!WindowShouldClose()) {
         ds.dt = GetFrameTime();
-        key_poll(&cd);
+        keyboard_key_poll(&cd);
+        mouse_key_poll(&cd);
 
         BeginDrawing();
         game_update(&s, &cd, &ds);

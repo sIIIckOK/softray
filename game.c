@@ -57,17 +57,20 @@ typedef enum {
 typedef Button Keyboard_Keys[KEY_CODE_COUNT];
 
 typedef enum {
+    KEY_MOUSE_NULL,
     KEY_MOUSE_LEFT,
     KEY_MOUSE_RIGHT,
     KEY_MOUSE_MIDDLE,
     KEY_MOUSE_4,
     KEY_MOUSE_5,
+    KEY_MOUSE_WHEEL,
     KEY_MOUSE_COUNT,
 } Key_Mouse;
 
 typedef struct {
     Vec2 pos;
-    Key_Mouse button[KEY_MOUSE_COUNT];
+    Vec2 delta;
+    Button button[KEY_MOUSE_COUNT];
 } Mouse;
 
 typedef struct {
@@ -90,8 +93,12 @@ void game_init(Screen* s, Core_Data* cs, Data_Struct* ds) {
 void game_update(Screen* s, Core_Data* cs, Data_Struct* ds) {
     screen_clear(s, 0);
     if (cs->keyboard['W'].is_pressed) {
-        printf("balls from inside the game\n");
+        printf("keyboard balls\n");
     }
+    if (cs->mouse.button[KEY_MOUSE_LEFT].is_pressed) {
+        printf("mouse balls\n");
+    }
+    printf("%f, %f\n", cs->mouse.pos.x, cs->mouse.pos.y);
 }
 
 
