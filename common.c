@@ -2,6 +2,10 @@
 #define __COMMON_C__
 
 #include <math.h>
+#include <stdint.h>
+#include <sys/types.h>
+
+
 #define LOG_INFO(...) do { printf("[%s:%d] INFO: %s\n", __FILE__, __LINE__, __VA_ARGS__); } while(0);
 #define LOG_ERROR(...) do { printf("ERROR [%s:%d]: %s\n", __FILE__, __LINE__, __VA_ARGS__); } while(0);
 
@@ -13,6 +17,11 @@
 #define COMP_X (0)
 #define COMP_Y (1)
 #define COMP_Z (2)
+
+typedef union {
+    struct { uint8_t r; uint8_t g; uint8_t b; uint8_t a; };
+    uint8_t v[4];
+} Col;
 
 typedef union {
     struct { float x; float y; };
@@ -150,6 +159,27 @@ Vec3 vec3_cross(Vec3 v1, Vec3 v2) {
         .y = v1.z*v2.x - v1.x*v2.z,
         .z = v1.x*v2.y - v1.y*v2.x,
     };
+}
+
+int cross2d(int p1_x, int p1_y, int p2_x, int p2_y) {
+    return p1_x*p2_y - p1_y*p2_x;
+}
+
+
+Vec2i vec2i_distance_vec(Vec2i v1, Vec2i v2) {
+    return (Vec2i){
+        .x = v1.x - v2.x,
+        .y = v1.y - v2.y,
+    };
+}
+
+int triangle2d_area(Vec2i v1, Vec2i v2, Vec2i v3) {
+    Vec2i dv1 = vec2i_distance_vec(v1, v2);
+    Vec2i dv2 = vec2i_distance_vec(v1, v3);
+
+    int result = cross2d(dv1.x, dv1.y, dv2.x, dv2.y)/2;
+    if (result < 0) result*=-1;
+    return result;
 }
 
 #endif// __COMMON_C__

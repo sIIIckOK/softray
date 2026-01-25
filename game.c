@@ -22,10 +22,15 @@ char* shift(int* argc, char*** argv) {
 }
 
 typedef struct {
-    bool  is_pressed;
-    bool  was_pressed;
+    bool  pressed;
+    bool  held;
+    bool  released;
+    bool  off;
     float held_time;
 } Button;
+
+static bool btn_is_pressed(Button btn) { return btn.pressed; }
+static bool btn_is_held(Button btn) { return btn.held; }
 
 #define KEY_CHAR_END (257)
 typedef enum {
@@ -74,31 +79,74 @@ typedef struct {
 } Mouse;
 
 typedef struct {
+    Screen screen;
     Keyboard_Keys keyboard;
     Mouse mouse;
+    float dt;
 } Core_Data;
 
 typedef struct {
-    float dt;
+    Vec3 pos;
+    Vec3 vel;
+    Vec3 acc;
+
+    float damp;
+} Entity;
+
+typedef struct {
+
 } Data_Struct;
 
-static int counter = 0;
-char temp_buffer[128] = {0};
+#define OUTFILE "./frames/"
 
-#define OUTFILE "./frames/cube/"
-
-void game_init(Screen* s, Core_Data* cs, Data_Struct* ds) {
+void game_init(Core_Data* core, Data_Struct* ds) {
 }
 
-void game_update(Screen* s, Core_Data* cs, Data_Struct* ds) {
+void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
     screen_clear(s, 0);
-    if (cs->keyboard['W'].is_pressed) {
-        printf("keyboard balls\n");
-    }
-    if (cs->mouse.button[KEY_MOUSE_LEFT].is_pressed) {
-        printf("mouse balls\n");
-    }
-    printf("%f, %f\n", cs->mouse.pos.x, cs->mouse.pos.y);
+
+    float depth = 1;
+    Vertex v1 = {
+        .pos = {
+            .x = -0.5,
+            .y = -0.5,
+            .z = depth,
+        },
+        .color = {
+            0xff,
+            0x00,
+            0x00,
+            .a = 0xff,
+        }
+    };
+    Vertex v2 = {
+        .pos = {
+            .x = 0.5,
+            .y = -0.5,
+            .z = depth,
+        },
+        .color = {
+            0x00,
+            0xff,
+            0x00,
+            .a = 0xff,
+        }
+    };
+    Vertex v3 = {
+        .pos = {
+            .x = 0,
+            .y = 0.5,
+            .z = depth,
+        },
+        .color = {
+            0x00,
+            0x00,
+            0xff,
+            .a = 0xff,
+        }
+    };
+
+    screen_draw_triangle(s, v1, v2, v3);
 }
 
 
