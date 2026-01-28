@@ -177,10 +177,21 @@ int triangle2d_area(Vec2i v1, Vec2i v2, Vec2i v3) {
     Vec2i dv1 = vec2i_distance_vec(v1, v2);
     Vec2i dv2 = vec2i_distance_vec(v1, v3);
 
-    int result = cross2d(dv1.x, dv1.y, dv2.x, dv2.y)/2;
+    int result = cross2d(dv1.x, dv1.y, dv2.x, dv2.y)>>1;
     if (result < 0) result*=-1;
     return result;
 }
+
+#define da_append(xs, x)                                                             \
+    do {                                                                             \
+        if ((xs)->count >= (xs)->capacity) {                                         \
+            if ((xs)->capacity == 0) (xs)->capacity = 256;                           \
+            else (xs)->capacity *= 2;                                                \
+            (xs)->items = realloc((xs)->items, (xs)->capacity*sizeof(*(xs)->items)); \
+        }                                                                            \
+                                                                                     \
+        (xs)->items[(xs)->count++] = (x);                                            \
+    } while (0)
 
 #endif// __COMMON_C__
 

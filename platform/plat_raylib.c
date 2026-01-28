@@ -1,5 +1,6 @@
 #include "../game.c"
 #include "../include/raylib.h"
+#include <stdio.h>
 
 Texture render_init_screen(Screen* s) {
     Image image = {0};
@@ -160,7 +161,7 @@ int main(int argc, char** argv) {
     };
     Data_Struct ds = {0};
     Core_Data cd = { .screen = s };
-    
+
     InitWindow(s.width, s.height, "Hello");
     Image img = {
         s.pixels,
@@ -176,10 +177,12 @@ int main(int argc, char** argv) {
         cd.dt = GetFrameTime();
         keyboard_key_poll(&cd);
         mouse_key_poll(&cd);
+        DrawFPS(10, 10);
 
         BeginDrawing();
-        game_update(&s, &cd, &ds);
 
+        game_update(&s, &cd, &ds);
+        
         UpdateTexture(tex, s.pixels);
         DrawTexture(tex, 0, 0, WHITE);
 

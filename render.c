@@ -9,9 +9,9 @@
 #include <sys/types.h>
 
 
-#define NEAR_CLIP_PLANE  (0.1)
+#define NEAR_CLIP_PLANE  (0.5)
 #define FOREGROUND_COLOR (0xff00ff00)
-#define MY_RED            (0xff0000ff)
+#define MY_RED           (0xff0000ff)
 
 typedef struct {
     uint32_t* pixels;
@@ -21,8 +21,33 @@ typedef struct {
 
 typedef struct {
     Vec3 pos;
+} Cam;
+
+typedef struct {
+    Vec3 pos;
     Col color;
 } Vertex;
+typedef struct {
+    Vec2i pos;
+    Col   color;
+} Screen_Vertex;
+
+typedef struct {
+    Vertex* items;
+    size_t count;
+    size_t capacity;
+} Vertices;
+
+typedef struct {
+    size_t* items;
+    size_t count;
+    size_t capacity;
+} Indices;
+
+typedef struct {
+    Vertices vertices;
+    Indices face_idx;
+} Object;
 
 uint32_t col_getint(Col c) {
     uint32_t result = 
@@ -159,20 +184,47 @@ void screen_draw_line_thickness(Screen* screen,
     }
 }
 
-Vec2i screen_project(const Screen* s, Vec3 p) {
-    // TODO (@siiick): when fix z == 0 (preferably u should check z < NEAR_CLIP_PLANE)
+typedef struct {
+    Vec2i v;
+    bool ok;
+} Vec2i_Result;
+
+Vec2i_Result screen_project(const Screen* s, Vec3 p) {
+    if (p.z <= NEAR_CLIP_PLANE) {
+        return (Vec2i_Result) {
+            .v = {0},
+            .ok = false,
+        };
+    }
     float x = ((p.x/p.z) + 1)/2;
     float y = ((p.y/p.z) + 1)/2;
-    return (Vec2i) {
-        .x = x*s->width,
-        .y = y*s->height,
+    return (Vec2i_Result) {
+        .v = {
+            .x = x*s->width,
+            .y = y*s->height,
+        },
+        .ok = true,
     };
 }
+float _sign(Vec2i p1, Vec2i p2, Vec2i p3) {
+    return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+}
+bool point_in_triangle (Vec2i pt, Vec2i v1, Vec2i v2, Vec2i v3)
+{
+    float d1, d2, d3;
+    bool has_neg, has_pos;
+    d1 = _sign(pt, v1, v2);
+    d2 = _sign(pt, v2, v3);
+    d3 = _sign(pt, v3, v1);
+    has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+    has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+    return !(has_neg && has_pos);
+}
 
-void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
-    Vec2i p1 = screen_project(s, v1.pos);
-    Vec2i p2 = screen_project(s, v2.pos);
-    Vec2i p3 = screen_project(s, v3.pos);
+void screen_draw_triangle(Screen* s, Screen_Vertex v1, Screen_Vertex v2, Screen_Vertex v3) {
+    Vec2i p1 = v1.pos;
+    Vec2i p2 = v2.pos;
+    Vec2i p3 = v3.pos;
     
     int big_tri_area = triangle2d_area(p1, p2, p3);
 
@@ -184,11 +236,9 @@ void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
 
     for (int y = min_y; y <= max_y; y++) {
         for (int x = min_x; x <= max_x; x++) {
+            if (x < 0 || x > s->width || y < 0 || y > s->width) continue;
             Vec2i this_point = { x, y };
-            int u_area = triangle2d_area(this_point, p2,         p3);
-            int v_area = triangle2d_area(p1,         this_point, p3);
-            int w_area = triangle2d_area(p1,         p2,         this_point);
-            if (u_area + v_area + w_area > big_tri_area) continue;
+            if (!point_in_triangle(this_point, v1.pos, v2.pos, v3.pos)) continue;
 
             float u = (float)triangle2d_area(this_point, p2,         p3)        /big_tri_area;
             float v = (float)triangle2d_area(p1,         this_point, p3)        /big_tri_area;
@@ -205,6 +255,47 @@ void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
         }
     }
 }
+
+typedef struct {
+    Screen_Vertex v;
+    bool ok;
+} Screen_Vertex_Result;
+
+static inline Screen_Vertex_Result screen_project_vertex(const Screen* s, Vertex v) {
+    Vec2i_Result res = screen_project(s, v.pos);
+    return (Screen_Vertex_Result) {
+        .v = {
+            .pos = res.v,
+            .color = v.color,
+        },
+        .ok = res.ok,
+    };
+}
+
+Vec3 camera_project(const Cam* c, Vec3 v) {
+    return (Vec3) {
+        .x = v.x - c->pos.x,
+        .y = v.y - c->pos.y,
+        .z = v.z - c->pos.z,
+    };
+}
+
+void screen_draw_object(Screen* s, Cam* c, Object obj) {
+    for (int i = 0; i < obj.vertices.count; i += 3) {
+        #define VERTS_IN_TRIANGLE 3
+        Vertex vs[3] = {0};
+        Screen_Vertex_Result vs_res[3] = {0};
+        for (int vi = 0; vi < VERTS_IN_TRIANGLE; vi++) {
+            vs[vi] = obj.vertices.items[i+vi];
+            vs[vi].pos = camera_project(c, vs[vi].pos); 
+            vs_res[vi] = screen_project_vertex(s, vs[vi]);
+        }
+        if (vs_res[0].ok && vs_res[1].ok && vs_res[2].ok) {
+            screen_draw_triangle(s, vs_res[0].v, vs_res[1].v, vs_res[2].v);
+        }
+    }
+}
+
 
 void screen_print(const Screen* s) {
     for (int y = 0; y < s->height; y++) {
