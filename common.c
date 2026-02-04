@@ -3,8 +3,12 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+
 #include <sys/types.h>
 
+#define TODO(...) do { printf("[%s:%d] todo: %s\n", __FILE__, __LINE__, __VA_ARGS__); abort(); } while(0);
 
 #define LOG_INFO(...) do { printf("[%s:%d] INFO: %s\n", __FILE__, __LINE__, __VA_ARGS__); } while(0);
 #define LOG_ERROR(...) do { printf("ERROR [%s:%d]: %s\n", __FILE__, __LINE__, __VA_ARGS__); } while(0);
@@ -161,11 +165,17 @@ Vec3 vec3_cross(Vec3 v1, Vec3 v2) {
     };
 }
 
-int cross2d(int p1_x, int p1_y, int p2_x, int p2_y) {
+float cross2d(float p1_x, float p1_y, float p2_x, float p2_y) {
     return p1_x*p2_y - p1_y*p2_x;
 }
 
 
+Vec2 vec2_distance_vec(Vec2 v1, Vec2 v2) {
+    return (Vec2){
+        .x = v1.x - v2.x,
+        .y = v1.y - v2.y,
+    };
+}
 Vec2i vec2i_distance_vec(Vec2i v1, Vec2i v2) {
     return (Vec2i){
         .x = v1.x - v2.x,
@@ -173,11 +183,20 @@ Vec2i vec2i_distance_vec(Vec2i v1, Vec2i v2) {
     };
 }
 
-int triangle2d_area(Vec2i v1, Vec2i v2, Vec2i v3) {
-    Vec2i dv1 = vec2i_distance_vec(v1, v2);
-    Vec2i dv2 = vec2i_distance_vec(v1, v3);
+float triangle2d_area_v3(Vec3 v1, Vec3 v2, Vec3 v3) {
+    Vec2i dv1 = vec2i_distance_vec((Vec2i){v1.x, v1.y}, (Vec2i){v2.x, v2.y});
+    Vec2i dv2 = vec2i_distance_vec((Vec2i){v1.x, v1.y}, (Vec2i){v3.x, v3.y});
 
-    int result = cross2d(dv1.x, dv1.y, dv2.x, dv2.y)>>1;
+    float result = cross2d(dv1.x, dv1.y, dv2.x, dv2.y)/2;
+    if (result < 0) result*=-1;
+    return result;
+}
+
+float triangle2d_area(Vec2 v1, Vec2 v2, Vec2 v3) {
+    Vec2i dv1 = vec2i_distance_vec((Vec2i){v1.x, v1.y}, (Vec2i){v2.x, v2.y});
+    Vec2i dv2 = vec2i_distance_vec((Vec2i){v1.x, v1.y}, (Vec2i){v3.x, v3.y});
+
+    float result = cross2d(dv1.x, dv1.y, dv2.x, dv2.y)/2;
     if (result < 0) result*=-1;
     return result;
 }
@@ -192,6 +211,37 @@ int triangle2d_area(Vec2i v1, Vec2i v2, Vec2i v3) {
                                                                                      \
         (xs)->items[(xs)->count++] = (x);                                            \
     } while (0)
+
+char *read_file_as_string(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    if (size < 0) {
+        fclose(f);
+        return NULL;
+    }
+    fseek(f, 0, SEEK_SET);
+
+    char *buffer = (char *)malloc(size + 1);
+    if (!buffer) {
+        fclose(f);
+        return NULL;
+    }
+
+    size_t read = fread(buffer, 1, size, f);
+    fclose(f);
+
+    if (read != (size_t)size) {
+        free(buffer);
+        return NULL;
+    }
+
+    buffer[size] = '\0';
+    return buffer;
+}
+
 
 #endif// __COMMON_C__
 

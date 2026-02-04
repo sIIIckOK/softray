@@ -3,14 +3,15 @@
 #include <stdio.h>
 #include "common.c"
 
-#define SCREEN_RATIO_X (16)
-#define SCREEN_RATIO_Y (9)
+#define SCREEN_RATIO_Y (1)
+#define SCREEN_RATIO_X (1)
 
-#define SCREEN_FACTOR (80)
+#define SCREEN_FACTOR (500)
 #define SCREEN_WIDTH  (SCREEN_RATIO_X*SCREEN_FACTOR) 
 #define SCREEN_HEIGHT (SCREEN_RATIO_Y*SCREEN_FACTOR)
 
 static uint32_t screen_pixels[SCREEN_WIDTH*SCREEN_HEIGHT] = {0};
+static uint32_t screen_pixels_depth[SCREEN_WIDTH*SCREEN_HEIGHT] = {0};
 
 char* shift(int* argc, char*** argv) {
     if (*argc <= 0) {
@@ -96,12 +97,17 @@ typedef struct {
 
 typedef struct {
     Object obj;
+    Object new_obj;
 } Data_Struct;
 
 #define OUTFILE "./frames/"
 
 void game_init(Core_Data* core, Data_Struct* ds) {
     float depth = 0.6;
+    core->camera.pos.z = -5;
+
+    ds->new_obj = obj_load_file("./cube/cube.obj");
+
     Vertex v1 = {
         .pos = {
             .x = -0.5,
@@ -119,7 +125,7 @@ void game_init(Core_Data* core, Data_Struct* ds) {
         .pos = {
             .x = 0.5,
             .y = -0.5,
-            .z = depth,
+            .z = depth + 1,
         },
         .color = {
             0x00,
@@ -132,7 +138,7 @@ void game_init(Core_Data* core, Data_Struct* ds) {
         .pos = {
             .x = 0,
             .y = 0.5,
-            .z = depth,
+            .z = depth + 2,
         },
         .color = {
             0x00,
@@ -151,21 +157,29 @@ void game_init(Core_Data* core, Data_Struct* ds) {
 }
 
 void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
-    screen_clear(s, 0);
+    screen_clear(s, 0xff181818);
+
+    #define CAM_WALK_SPEED (3)
+    #define CAM_RUN_SPEED  (CAM_WALK_SPEED*3)
+    float cam_speed = CAM_WALK_SPEED;
+
+    if (core->keyboard[' '].held) {
+        cam_speed *= CAM_RUN_SPEED;
+    }
 
     if (core->keyboard['W'].held) {
-        core->camera.pos.z += core->dt;
+        core->camera.pos.z += core->dt*cam_speed;
     } else if (core->keyboard['S'].held) {
-        core->camera.pos.z -= core->dt;
+        core->camera.pos.z -= core->dt*cam_speed;
     }
 
     if (core->keyboard['A'].held) {
-        core->camera.pos.x -= core->dt;
+        core->camera.pos.x -= core->dt*cam_speed;
     } else if (core->keyboard['D'].held) {
-        core->camera.pos.x += core->dt;
+        core->camera.pos.x += core->dt*cam_speed;
     }
 
-    screen_draw_object(s, &core->camera, ds->obj);
+    screen_draw_obj_igbetter(s, &core->camera, &ds->new_obj);
 }
 
 

@@ -1,6 +1,5 @@
 #include "../game.c"
 #include "../include/raylib.h"
-#include <stdio.h>
 
 Texture render_init_screen(Screen* s) {
     Image image = {0};
@@ -154,13 +153,19 @@ void mouse_key_poll(Core_Data* cd) {
 
 int main(int argc, char** argv) {
     char* program_name = shift(&argc, &argv);
+
     Screen s = {
         .pixels = screen_pixels,
         .width = SCREEN_WIDTH,
         .height = SCREEN_HEIGHT,
+        .depth = screen_pixels_depth,
     };
     Data_Struct ds = {0};
     Core_Data cd = { .screen = s };
+
+    game_init(&cd, &ds);
+
+    SetConfigFlags(FLAG_FULLSCREEN_MODE);
 
     InitWindow(s.width, s.height, "Hello");
     Image img = {
@@ -169,9 +174,18 @@ int main(int argc, char** argv) {
         1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
     };
     Texture2D tex = LoadTextureFromImage(img);
-    game_init(&cd, &ds);
+    float tex_ratio = (float)tex.width/tex.height;
+    float tex_ratio_inv = (float)tex.height/tex.width;
+    const int MONITOR_WIDTH = GetScreenWidth();
+    const int MONITOR_HEIGHT = GetScreenHeight();
+    Rectangle dst_rect = (Rectangle){
+        .width = MONITOR_HEIGHT*tex_ratio_inv,
+        .height = MONITOR_HEIGHT,
+        .x = (MONITOR_WIDTH - MONITOR_HEIGHT*tex_ratio_inv)/2,
+        .y = 0,
+    };
 
-    #define FPS 60
+    #define FPS 2000
     SetTargetFPS(FPS);
     while(!WindowShouldClose()) {
         cd.dt = GetFrameTime();
@@ -184,7 +198,11 @@ int main(int argc, char** argv) {
         game_update(&s, &cd, &ds);
         
         UpdateTexture(tex, s.pixels);
-        DrawTexture(tex, 0, 0, WHITE);
+        DrawTexturePro(tex, 
+                       (Rectangle){0, 0, tex.width, tex.height}, 
+                       dst_rect,
+                       (Vector2){0, 0}, 0, 
+                       WHITE);
 
         ClearBackground(BLACK);
         EndDrawing();
