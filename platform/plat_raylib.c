@@ -185,18 +185,18 @@ int main(int argc, char** argv) {
         .y = 0,
     };
 
-    #define FPS 2000
+    #define FPS 1000
     SetTargetFPS(FPS);
     while(!WindowShouldClose()) {
         cd.dt = GetFrameTime();
         keyboard_key_poll(&cd);
         mouse_key_poll(&cd);
-        DrawFPS(10, 10);
 
         BeginDrawing();
+        DrawFPS(10, 10);
 
         game_update(&s, &cd, &ds);
-        
+
         UpdateTexture(tex, s.pixels);
         DrawTexturePro(tex, 
                        (Rectangle){0, 0, tex.width, tex.height}, 

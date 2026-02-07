@@ -106,7 +106,8 @@ void game_init(Core_Data* core, Data_Struct* ds) {
     float depth = 0.6;
     core->camera.pos.z = -5;
 
-    ds->new_obj = obj_load_file("./cube/cube.obj");
+    bool ok = obj_load_file("./objects/cube.obj", &ds->new_obj);
+    if (!ok) return;
 
     Vertex v1 = {
         .pos = {

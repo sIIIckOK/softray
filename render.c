@@ -285,20 +285,20 @@ void screen_draw_triangle_igbetter(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
     int start_x = min_x;
     int start_y = min_y;
 
-    int e0_row = edge_coeff(p1.x, p1.y, p2.x, p2.y, start_x, start_y);
-    int e1_row = edge_coeff(p2.x, p2.y, p3.x, p3.y, start_x, start_y);
-    int e2_row = edge_coeff(p3.x, p3.y, p1.x, p1.y, start_x, start_y);
+    float e0_row = edge_coeff(p1.x, p1.y, p2.x, p2.y, start_x, start_y);
+    float e1_row = edge_coeff(p2.x, p2.y, p3.x, p3.y, start_x, start_y);
+    float e2_row = edge_coeff(p3.x, p3.y, p1.x, p1.y, start_x, start_y);
 
     for (float y = min_y; y <= max_y; y++) {
-        int e0 = e0_row;
-        int e1 = e1_row;
-        int e2 = e2_row;
+        float e0 = e0_row;
+        float e1 = e1_row;
+        float e2 = e2_row;
 
         for (float x = min_x; x <= max_x; x++) {
             if (e0 <= 0 && e1 <= 0 && e2 <= 0) {
-                float w0 =  e1 * inv_area;
-                float w1 =  e2 * inv_area;
-                float w2 =  e0 * inv_area;
+                float w0 = e1 * inv_area;
+                float w1 = e2 * inv_area;
+                float w2 = e0 * inv_area;
 
                 Col color;
                 color.r = v1.color.r * w0 + v2.color.r * w1 + v3.color.r * w2;
@@ -568,11 +568,16 @@ String_View parser_next_token_char(Parser* p, char* str) {
 }
 
 
-Object obj_load_file(char* obj_path) {
+bool obj_load_file(char* obj_path, Object* obj) {
     Vertices vertices = {0};
     Indices face_idx = {0};
 
     char* content = read_file_as_string(obj_path);
+    if (!content) { 
+        printf("ERROR: Could not find obj file `%s` to read\n", obj_path);
+        return false; 
+    }
+
     Parser p = parser_new_from_cstr(content);
     
     String_View tok = parser_next_token(&p);
@@ -604,10 +609,9 @@ Object obj_load_file(char* obj_path) {
         }
     }
 
-    return (Object) {
-        .vertices = vertices,
-        .face_idx = face_idx,
-    };
+    obj->vertices = vertices;
+    obj->face_idx = face_idx;
+    return true;
 }
 
 
