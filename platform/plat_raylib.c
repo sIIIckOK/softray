@@ -99,8 +99,8 @@ int mouse_key_translate_translation_table[] = {
 };
 
 int key_translate(int key) {
-    if (key > ARRAY_SIZE(key_translate_table) || key < 0) {
-        return 0;
+    if (key >= ARRAY_SIZE(key_translate_table) || key < 0) {
+        return KEY_CODE_NULL;
     }
 
     return key_translate_table[key];
@@ -193,16 +193,20 @@ int main(int argc, char** argv) {
         mouse_key_poll(&cd);
 
         BeginDrawing();
-        DrawFPS(10, 10);
 
         game_update(&s, &cd, &ds);
 
         UpdateTexture(tex, s.pixels);
-        DrawTexturePro(tex, 
-                       (Rectangle){0, 0, tex.width, tex.height}, 
-                       dst_rect,
-                       (Vector2){0, 0}, 0, 
-                       WHITE);
+        DrawTexturePro(tex, (Rectangle){0, 0, tex.width, tex.height}, 
+                       (Rectangle){0, 0, tex.height * 3, tex.width * 3}, (Vector2){0, 0}, 0, WHITE);
+        // DrawTexturePro(tex, 
+        //                (Rectangle){0, 0, tex.width, tex.height}, 
+        //                dst_rect,
+        //                (Vector2){0, 0}, 0, 
+        //                WHITE);
+        DrawFPS(10, 10);
+        const char* info_text = TextFormat("POS: %f %f %f\nFOV: %f", cd.camera.pos.x, cd.camera.pos.y, cd.camera.pos.z, cd.camera.fov);
+        DrawText(info_text, SCREEN_HEIGHT/20, SCREEN_WIDTH/20, 40, WHITE);
 
         ClearBackground(BLACK);
         EndDrawing();

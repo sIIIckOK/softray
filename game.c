@@ -3,15 +3,15 @@
 #include <stdio.h>
 #include "common.c"
 
-#define SCREEN_RATIO_Y (1)
-#define SCREEN_RATIO_X (1)
+#define SCREEN_RATIO_Y (16)
+#define SCREEN_RATIO_X (10)
 
-#define SCREEN_FACTOR (500)
+#define SCREEN_FACTOR (50)
 #define SCREEN_WIDTH  (SCREEN_RATIO_X*SCREEN_FACTOR) 
 #define SCREEN_HEIGHT (SCREEN_RATIO_Y*SCREEN_FACTOR)
 
 static uint32_t screen_pixels[SCREEN_WIDTH*SCREEN_HEIGHT] = {0};
-static uint32_t screen_pixels_depth[SCREEN_WIDTH*SCREEN_HEIGHT] = {0};
+static float screen_pixels_depth[SCREEN_WIDTH*SCREEN_HEIGHT] = {0};
 
 char* shift(int* argc, char*** argv) {
     if (*argc <= 0) {
@@ -97,71 +97,36 @@ typedef struct {
 
 typedef struct {
     Object obj;
-    Object new_obj;
 } Data_Struct;
 
 #define OUTFILE "./frames/"
 
 void game_init(Core_Data* core, Data_Struct* ds) {
-    float depth = 0.6;
     core->camera.pos.z = -5;
+    core->camera.fov = 90;
 
-    bool ok = obj_load_file("./objects/cube.obj", &ds->new_obj);
+    bool ok = obj_load_file("./objects/sword.obj", &ds->obj);
+    printf("no of triangle vertices %zu\n", ds->obj.vertices.count);
     if (!ok) return;
-
-    Vertex v1 = {
-        .pos = {
-            .x = -0.5,
-            .y = -0.5,
-            .z = depth,
-        },
-        .color = {
-            0xff,
-            0x00,
-            0x00,
-            .a = 0xff,
-        }
-    };
-    Vertex v2 = {
-        .pos = {
-            .x = 0.5,
-            .y = -0.5,
-            .z = depth + 1,
-        },
-        .color = {
-            0x00,
-            0xff,
-            0x00,
-            .a = 0xff,
-        }
-    };
-    Vertex v3 = {
-        .pos = {
-            .x = 0,
-            .y = 0.5,
-            .z = depth + 2,
-        },
-        .color = {
-            0x00,
-            0x00,
-            0xff,
-            .a = 0xff,
-        }
-    };
-    da_append(&ds->obj.vertices, v1);
-    da_append(&ds->obj.vertices, v2);
-    da_append(&ds->obj.vertices, v3);
-
-    da_append(&ds->obj.face_idx, 1);
-    da_append(&ds->obj.face_idx, 2);
-    da_append(&ds->obj.face_idx, 3);
 }
+
+void depth_buffer_clear(Screen* s) {
+    for (int i = 0; i < s->height*s->width; i++) {
+        s->depth[i] = 0;
+    }
+} 
 
 void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
     screen_clear(s, 0xff181818);
+    depth_buffer_clear(s);
 
     #define CAM_WALK_SPEED (3)
     #define CAM_RUN_SPEED  (CAM_WALK_SPEED*3)
+    #define ZOOM_SPEED (10.0f)
+    #define FOV_MIN    (30.0f) 
+    #define FOV_MAX    (120.0f)
+
+
     float cam_speed = CAM_WALK_SPEED;
 
     if (core->keyboard[' '].held) {
@@ -175,12 +140,24 @@ void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
     }
 
     if (core->keyboard['A'].held) {
-        core->camera.pos.x -= core->dt*cam_speed;
-    } else if (core->keyboard['D'].held) {
         core->camera.pos.x += core->dt*cam_speed;
+    } else if (core->keyboard['D'].held) {
+        core->camera.pos.x -= core->dt*cam_speed;
     }
 
-    screen_draw_obj_igbetter(s, &core->camera, &ds->new_obj);
+    if (core->keyboard['J'].held) {
+        core->camera.pos.y -= core->dt*cam_speed;
+    } else if (core->keyboard['K'].held) {
+        core->camera.pos.y += core->dt*cam_speed;
+    }
+
+    if (core->keyboard['I'].held) {
+        core->camera.fov -= core->dt * ZOOM_SPEED;
+    } else if (core->keyboard['O'].held) {
+        core->camera.fov += core->dt * ZOOM_SPEED;
+    }
+
+    screen_draw_obj(s, &core->camera, &ds->obj);
 }
 
 

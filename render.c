@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,12 +12,12 @@
 #include <sys/types.h>
 
 
-#define NEAR_CLIP_PLANE  (1)
+#define NEAR_CLIP_PLANE  (0.25)
 #define FOREGROUND_COLOR (0xff00ff00)
 #define MY_RED           (0xff0000ff)
 
 typedef struct {
-    uint32_t* depth;
+    float* depth;
     uint32_t* pixels;
     size_t width;
     size_t height;
@@ -24,6 +25,7 @@ typedef struct {
 
 typedef struct {
     Vec3 pos;
+    float fov;
 } Cam;
 
 typedef struct {
@@ -202,38 +204,23 @@ Vec2 vec3_to_vec2(Vec3 v3) {
     };
 }
 
-Vec3_Result screen_project_ortho(const Screen* s, Vec3 p) {
+Vec3_Result screen_project(const Screen* s, const Cam* c, Vec3 p) {
     if (p.z <= NEAR_CLIP_PLANE) {
         return (Vec3_Result) {
             .v = {0},
             .ok = false,
         };
     }
-    float x = (p.x/p.z + 1)/2;
-    float y = (p.y/p.z + 1)/2;
+    float aspect = 16.0f/10;
+    float fov_rad = c->fov * MATH_PI/180;
+    float fov_x = (tan(fov_rad/2) * 2) * aspect;
+    float fov_y = (tan(fov_rad/2) * 2);
+    float x = p.x/(-p.z * fov_x);
+    float y = p.y/(-p.z * fov_y);
     return (Vec3_Result) {
         .v = {
-            .x = x*s->width,
-            .y = y*s->height,
-            .z = p.z,
-        },
-        .ok = true,
-    };
-}
-
-Vec3_Result screen_project(const Screen* s, Vec3 p) {
-    if (p.z <= NEAR_CLIP_PLANE) {
-        return (Vec3_Result) {
-            .v = {0},
-            .ok = false,
-        };
-    }
-    float x = ((p.x/p.z) + 1)/2;
-    float y = ((p.y/p.z) + 1)/2;
-    return (Vec3_Result) {
-        .v = {
-            .x = x*s->width,
-            .y = y*s->height,
+            .x = ((x + 1)/2)*s->width,
+            .y = ((y + 1)/2)*s->height,
             .z = p.z
         },
         .ok = true,
@@ -255,11 +242,11 @@ bool is_triangle_front(Vec3 v1, Vec3 v2, Vec3 v3) {
     return cross2d(va.x, va.y, vb.x, vb.y) > 0;
 }
 
-static inline int edge_coeff(float x0, float y0, float x1, float y1, float px, float py) {
+static inline float edge_coeff(float x0, float y0, float x1, float y1, float px, float py) {
     return (px - x0)*(y1 - y0) - (py - y0)*(x1 - x0);
 }
 
-void screen_draw_triangle_igbetter(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
+void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
     Vec2 p1 = vec3_to_vec2(v1.pos);
     Vec2 p2 = vec3_to_vec2(v2.pos);
     Vec2 p3 = vec3_to_vec2(v3.pos);
@@ -269,58 +256,69 @@ void screen_draw_triangle_igbetter(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
     int min_y = ceilf(MIN(p1.y, MIN(p2.y, p3.y)));
     int max_y = floorf(MAX(p1.y, MAX(p2.y, p3.y)));
 
-    int tri_area = edge_coeff(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+    float tri_area = edge_coeff(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
     if (tri_area == 0.0f) return;
     float inv_area = 1.0f / tri_area;
 
-    int e0_dx =  (p2.y - p1.y);
-    int e0_dy = -(p2.x - p1.x);
+    float e1_dx =  (p2.y - p1.y);
+    float e1_dy = -(p2.x - p1.x);
 
-    int e1_dx =  (p3.y - p2.y);
-    int e1_dy = -(p3.x - p2.x);
+    float e2_dx =  (p3.y - p2.y);
+    float e2_dy = -(p3.x - p2.x);
 
-    int e2_dx =  (p1.y - p3.y);
-    int e2_dy = -(p1.x - p3.x);
+    float e3_dx =  (p1.y - p3.y);
+    float e3_dy = -(p1.x - p3.x);
 
-    int start_x = min_x;
-    int start_y = min_y;
+    float start_x = min_x;
+    float start_y = min_y;
 
-    float e0_row = edge_coeff(p1.x, p1.y, p2.x, p2.y, start_x, start_y);
-    float e1_row = edge_coeff(p2.x, p2.y, p3.x, p3.y, start_x, start_y);
-    float e2_row = edge_coeff(p3.x, p3.y, p1.x, p1.y, start_x, start_y);
+    float e1_row = edge_coeff(p1.x, p1.y, p2.x, p2.y, start_x, start_y);
+    float e2_row = edge_coeff(p2.x, p2.y, p3.x, p3.y, start_x, start_y);
+    float e3_row = edge_coeff(p3.x, p3.y, p1.x, p1.y, start_x, start_y);
 
     for (float y = min_y; y <= max_y; y++) {
-        float e0 = e0_row;
         float e1 = e1_row;
         float e2 = e2_row;
+        float e3 = e3_row;
 
         for (float x = min_x; x <= max_x; x++) {
-            if (e0 <= 0 && e1 <= 0 && e2 <= 0) {
-                float w0 = e1 * inv_area;
-                float w1 = e2 * inv_area;
-                float w2 = e0 * inv_area;
+            if ((e1 <= 0 && e2 <= 0 && e3 <= 0) || (e1 >= 0 && e2 >= 0 && e3 >= 0)) 
+                if (x >= 0 && y >= 0 && x < s->width && y < s->height) {
+                float w1 = e1 * inv_area;
+                float w2 = e2 * inv_area;
+                float w3 = e3 * inv_area;
 
-                Col color;
-                color.r = v1.color.r * w0 + v2.color.r * w1 + v3.color.r * w2;
-                color.g = v1.color.g * w0 + v2.color.g * w1 + v3.color.g * w2;
-                color.b = v1.color.b * w0 + v2.color.b * w1 + v3.color.b * w2;
-                color.a = v1.color.a * w0 + v2.color.a * w1 + v3.color.a * w2;
+                    float new_pixel_depth = v1.pos.z * w1 + v2.pos.z * w2 + v3.pos.z * w3;
+                    int idx = (int)x + (s->width * (int)y);
+                    float old_pixel_depth = s->depth[idx];
 
-                screen_put_pixel(s, x, y, col_getint(color));
-            }
+                    if (old_pixel_depth == 0.0f || old_pixel_depth > new_pixel_depth) {
+                        //draw new_pixel
+                        s->depth[idx] = new_pixel_depth;
+                        Col color;
 
-            e0 += e0_dx;
+                        color.r = v1.color.r * w1 + v2.color.r * w2 + v3.color.r * w3;
+                        color.g = v1.color.g * w1 + v2.color.g * w2 + v3.color.g * w3;
+                        color.b = v1.color.b * w1 + v2.color.b * w2 + v3.color.b * w3;
+                        color.a = v1.color.a * w1 + v2.color.a * w2 + v3.color.a * w3;
+
+                        screen_put_pixel(s, x, y, col_getint(color));
+                    }
+                }
+
             e1 += e1_dx;
             e2 += e2_dx;
+            e3 += e3_dx;
         }
 
-        e0_row += e0_dy;
         e1_row += e1_dy;
         e2_row += e2_dy;
+        e3_row += e3_dy;
     }
+
 }
 
-void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
+void screen_draw_triangle_deprecate(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
     Vec2 p1 = vec3_to_vec2(v1.pos);
     Vec2 p2 = vec3_to_vec2(v2.pos);
     Vec2 p3 = vec3_to_vec2(v3.pos);
@@ -360,19 +358,8 @@ typedef struct {
     bool ok;
 } Vertex_Result;
 
-static inline Vertex_Result screen_vertex_project_ortho(const Screen* s, Vertex v) {
-    Vec3_Result res = screen_project_ortho(s, v.pos);
-    return (Vertex_Result) {
-        .v = {
-            .pos = res.v,
-            .color = v.color,
-        },
-        .ok = res.ok,
-    };
-}
-
-static inline Vertex_Result screen_vertex_project(const Screen* s, Vertex v) {
-    Vec3_Result res = screen_project(s, v.pos);
+static inline Vertex_Result screen_vertex_project(const Screen* s, const Cam* c, Vertex v) {
+    Vec3_Result res = screen_project(s, c, v.pos);
     return (Vertex_Result) {
         .v = {
             .pos = res.v,
@@ -393,55 +380,52 @@ Vertex camera_project(const Cam* c, Vertex v) {
     };
 }
 
-void screen_draw_obj_ortho(Screen* s, Cam* c, Object obj) {
-    for (int i = 0; i < obj.vertices.count; i += 3) {
-        #define VERTS_IN_TRIANGLE 3
-        Vertex vs[3] = {0};
-        Vertex_Result vs_res[3] = {0};
-        for (int vi = 0; vi < VERTS_IN_TRIANGLE; vi++) {
-            vs[vi] = obj.vertices.items[i+vi];
-            vs[vi] = camera_project(c, vs[vi]); 
-            vs_res[vi] = screen_vertex_project_ortho(s, vs[vi]);
-        }
-        if (vs_res[0].ok && vs_res[1].ok && vs_res[2].ok) {
-            screen_draw_triangle(s, vs_res[0].v, vs_res[1].v, vs_res[2].v);
-        }
-    }
+void scale_vec3(Vec3* v, float scale_factor) {
+    v->x *= scale_factor;
+    v->y *= scale_factor;
+    v->z *= scale_factor;
 }
 
-void screen_draw_obj_(Screen* s, Cam* c, Object* obj) {
-    for (int i = 0; i < obj->face_idx.count; i += 3) {
-        size_t id1 = obj->face_idx.items[i+0];
-        size_t id2 = obj->face_idx.items[i+1];
-        size_t id3 = obj->face_idx.items[i+2];
-        Vertex sv1 = screen_vertex_project(s, camera_project(c, obj->vertices.items[id1])).v;
-        sv1.color = (Col) {255, 100, 0, 255};
-        Vertex sv2 = screen_vertex_project(s, camera_project(c, obj->vertices.items[id2])).v;
-        sv2.color = (Col) {255, 50, 0, 255};
-        Vertex sv3 = screen_vertex_project(s, camera_project(c, obj->vertices.items[id3])).v;
-        sv3.color = (Col) {255, 0, 0, 255};
-        if (is_triangle_front(sv1.pos, sv2.pos, sv3.pos)) {
-            screen_draw_triangle(s, sv1, sv2, sv3);
-        }
-    }
-}
+void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
+    static int balls = 0;
+    for (int i = 0; i < obj->face_idx.count - 2; i += 3) {
+        Vertex v1 = obj->vertices.items[obj->face_idx.items[i+2]];
+        Vertex v2 = obj->vertices.items[obj->face_idx.items[i+1]];
+        Vertex v3 = obj->vertices.items[obj->face_idx.items[i+0]];
 
-void screen_draw_obj_igbetter(Screen* s, Cam* c, Object* obj) {
-    for (int i = 0; i < obj->face_idx.count; i += 3) {
-        size_t id1 = obj->face_idx.items[i+0];
-        size_t id2 = obj->face_idx.items[i+1];
-        size_t id3 = obj->face_idx.items[i+2];
-        Vertex_Result sv1 = screen_vertex_project(s, camera_project(c, obj->vertices.items[id1]));
-        Vertex_Result sv2 = screen_vertex_project(s, camera_project(c, obj->vertices.items[id2]));
-        Vertex_Result sv3 = screen_vertex_project(s, camera_project(c, obj->vertices.items[id3]));
+        float scale_factor = 1;
+        scale_vec3(&v1.pos, scale_factor);
+        scale_vec3(&v2.pos, scale_factor);
+        scale_vec3(&v3.pos, scale_factor);
+        Vertex_Result sv1 = screen_vertex_project(s, c, camera_project(c, v1));
+        Vertex_Result sv2 = screen_vertex_project(s, c, camera_project(c, v2));
+        Vertex_Result sv3 = screen_vertex_project(s, c, camera_project(c, v3));
     
         if (!sv1.ok || !sv2.ok || !sv3.ok) continue;
 
-        sv1.v.color = (Col) {255, 255, 0, 0};
-        sv2.v.color = (Col) {255, 0, 255, 0};
-        sv3.v.color = (Col) {255, 0, 0, 255};
+
+        sv1.v.color = (Col) {255, 0, 0, 255};
+        sv2.v.color = (Col) {155, 0, 0, 255};
+        sv3.v.color = (Col) {055, 0, 0, 255};
         if (is_triangle_front(sv1.v.pos, sv2.v.pos, sv3.v.pos)) {
-            screen_draw_triangle_igbetter(s, sv1.v, sv2.v, sv3.v);
+            screen_draw_triangle(s, sv1.v, sv2.v, sv3.v);
+        }
+    }
+}
+
+void screen_draw_obj_deprecate(Screen* s, Cam* c, Object* obj) {
+    for (int i = 0; i < obj->face_idx.count; i += 3) {
+        size_t id1 = obj->face_idx.items[i+0];
+        size_t id2 = obj->face_idx.items[i+1];
+        size_t id3 = obj->face_idx.items[i+2];
+        Vertex sv1 = screen_vertex_project(s, c, camera_project(c, obj->vertices.items[id1])).v;
+        sv1.color = (Col) {255, 100, 0, 255};
+        Vertex sv2 = screen_vertex_project(s, c, camera_project(c, obj->vertices.items[id2])).v;
+        sv2.color = (Col) {255, 50, 0, 255};
+        Vertex sv3 = screen_vertex_project(s, c, camera_project(c, obj->vertices.items[id3])).v;
+        sv3.color = (Col) {255, 0, 0, 255};
+        if (is_triangle_front(sv1.pos, sv2.pos, sv3.pos)) {
+            screen_draw_triangle_deprecate(s, sv1, sv2, sv3);
         }
     }
 }
@@ -451,7 +435,7 @@ void screen_draw_obj_points(Screen* s, const Cam* c, Object* obj) {
         Vertex v = obj->vertices.items[i];
         v = camera_project(c, v);
 
-        Vertex_Result rv = screen_vertex_project(s, (Vertex){.pos = v.pos, .color = v.color});
+        Vertex_Result rv = screen_vertex_project(s, c, (Vertex){.pos = v.pos, .color = v.color});
         #define PT_SIZE 10
         if (rv.ok) screen_draw_rect(s, rv.v.pos.x, rv.v.pos.y, PT_SIZE, PT_SIZE, 0xffffffff);
     }
@@ -507,11 +491,18 @@ void sv_skip_spaces(String_View* sv) {
     }
 }
 
-bool sv_cmp_cstr(const String_View* sv, char* cstr) {
+bool sv_cmp_cstr(String_View sv, char* cstr) {
     size_t cstr_len = strlen(cstr);
-    if (sv->len != cstr_len) return false;
-    for (int i = 0; i < sv->len; i++) if (sv->data[i] != cstr[i]) return false;
+    if (sv.len != cstr_len) return false;
+    for (int i = 0; i < sv.len; i++) if (sv.data[i] != cstr[i]) return false;
     return true;
+}
+
+bool sv_starts_with(String_View sv, char* prefix) {
+    size_t prefix_len = strlen(prefix);
+    if (sv.len < prefix_len) return false;
+    sv.len = prefix_len;
+    return sv_cmp_cstr(sv, prefix);
 }
 
 void parser_skip_spaces(Parser* p) {
@@ -555,11 +546,23 @@ String_View parser_next_token(Parser* p) {
     };
 }
 
-String_View parser_next_token_char(Parser* p, char* str) {
+String_View parser_next_token_chars(Parser* p, char* str) {
     char* data = &p->content.data[p->ptr];
     size_t len = 0;
     for (char* c = data; *c && !strchr(str, *c); c++) { len++; }
     p->ptr += len + 1;
+
+    return (String_View) {
+        .data = data,
+        .len = len,
+    };
+}
+
+String_View parser_seek_until_chars(Parser* const p, char* str) { // NOTE(@siiick): DOES NOT CHANGE THE PARSER STATE
+    char* data = &p->content.data[p->ptr];
+    size_t len = 0;
+    for (char* c = data; *c && !strchr(str, *c); c++) { len++; }
+    size_t ptr = p->ptr + len + 1;
 
     return (String_View) {
         .data = data,
@@ -579,39 +582,58 @@ bool obj_load_file(char* obj_path, Object* obj) {
     }
 
     Parser p = parser_new_from_cstr(content);
+
+    size_t face_count = 0;
     
     String_View tok = parser_next_token(&p);
-    while (p.ptr < p.content.len ) {
+    while (p.ptr < p.content.len) {
         tok = parser_next_token(&p);
         parser_skip_spaces(&p);
-        if (sv_cmp_cstr(&tok, "v")) {
+        if (sv_starts_with(tok, "#")) {
+            parser_skip_to_next_line(&p);
+        }
+        if (sv_cmp_cstr(tok, "v")) {
             float x = strtof(parser_next_token(&p).data, NULL);
             float y = strtof(parser_next_token(&p).data, NULL);
             float z = strtof(parser_next_token(&p).data, NULL);
+            
             Vertex v = (Vertex) {
                 .pos.x = x,
                 .pos.y = y,
                 .pos.z = z,
             };
             da_append(&vertices, v);
-        } else if (sv_cmp_cstr(&tok, "f")) {
-            size_t a = strtol(parser_next_token_char(&p, "/ ").data, NULL, 10) - 1;
+        } else if (sv_cmp_cstr(tok, "f")) {
+
+            size_t a = strtol(parser_next_token_chars(&p, "/ ").data, NULL, 10) - 1;
             parser_next_token(&p);
             da_append(&face_idx, a);
 
-            a = strtol(parser_next_token_char(&p, "/ ").data, NULL, 10) - 1;
+            size_t b = strtol(parser_next_token_chars(&p, "/ ").data, NULL, 10) - 1;
             parser_next_token(&p);
-            da_append(&face_idx, a);
+            da_append(&face_idx, b);
 
-            a = strtol(parser_next_token_char(&p, "/ ").data, NULL, 10) - 1;
+            size_t c = strtol(parser_next_token_chars(&p, "/ ").data, NULL, 10) - 1;
             parser_next_token(&p);
-            da_append(&face_idx, a);
+            da_append(&face_idx, c);
+
+            String_View last_ele = parser_seek_until_chars(&p, "/ \n");
+            printf("|"SV_FORMAT"|\n", SV_ARGS(last_ele));
+            char* endptr = NULL;
+            size_t d = strtol(last_ele.data, &endptr, 10) - 1;
+            if (!(endptr == last_ele.data) && d != 0) {
+                da_append(&face_idx, a);
+                da_append(&face_idx, c);
+                da_append(&face_idx, d);
+                parser_skip_to_next_line(&p);
+            }
+            face_count++;
         }
     }
+    printf(":::face count %zu\n", face_count);
 
     obj->vertices = vertices;
     obj->face_idx = face_idx;
     return true;
 }
-
 

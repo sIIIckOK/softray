@@ -241,7 +241,7 @@ char *read_file_as_string(const char *path) {
     buffer[size] = '\0';
     return buffer;
 }
-
+#define CLAMP(value, low, high) ((value) < (low) ? (low) : ((value) > (high) ? (high) : (value)))
 
 #endif// __COMMON_C__
 
