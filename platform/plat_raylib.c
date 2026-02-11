@@ -113,8 +113,8 @@ void keyboard_key_poll(Core_Data* cd) {
         bool is_held     = 0;
         bool is_pressed  = 0;
         if (!cd->keyboard[mykey].off) {
-            is_held = IsKeyDown(mykey);
-            is_pressed = IsKeyPressed(mykey);
+            is_held = IsKeyDown(i);
+            is_pressed = IsKeyPressed(i);
         }
         cd->keyboard[mykey].held = is_held;
         cd->keyboard[mykey].pressed = is_pressed;
@@ -149,7 +149,26 @@ void mouse_key_poll(Core_Data* cd) {
     // cd->mouse.button[KEY_MOUSE_5].pressed = cd->mouse.button[KEY_MOUSE_5].held;
     // cd->mouse.button[KEY_MOUSE_5].held = IsMouseButtonpressed(MOUSE_BUTTON_BACK) ? true : false;
 }
+Rectangle compute_letterbox_rect(int render_w, int render_h, int window_w, int window_h) {
+    float render_aspect = (float)render_w / (float)render_h;
+    float window_aspect = (float)window_w / (float)window_h;
 
+    Rectangle dst = {0};
+
+    if (window_aspect > render_aspect) {
+        dst.height = window_h;
+        dst.width  = window_h * render_aspect;
+        dst.x = (window_w - dst.width) * 0.5f;
+        dst.y = 0;
+    } else {
+        dst.width  = window_w;
+        dst.height = window_w / render_aspect;
+        dst.x = 0;
+        dst.y = (window_h - dst.height) * 0.5f;
+    }
+
+    return dst;
+}
 
 int main(int argc, char** argv) {
     char* program_name = shift(&argc, &argv);
@@ -178,37 +197,32 @@ int main(int argc, char** argv) {
     float tex_ratio_inv = (float)tex.height/tex.width;
     const int MONITOR_WIDTH = GetScreenWidth();
     const int MONITOR_HEIGHT = GetScreenHeight();
-    Rectangle dst_rect = (Rectangle){
-        .width = MONITOR_HEIGHT*tex_ratio_inv,
-        .height = MONITOR_HEIGHT,
-        .x = (MONITOR_WIDTH - MONITOR_HEIGHT*tex_ratio_inv)/2,
-        .y = 0,
-    };
 
     #define FPS 1000
     SetTargetFPS(FPS);
+
     while(!WindowShouldClose()) {
+
         cd.dt = GetFrameTime();
         keyboard_key_poll(&cd);
         mouse_key_poll(&cd);
 
         BeginDrawing();
+        ClearBackground(BLACK);
+
+        int ww = GetScreenWidth();
+        int wh = GetScreenHeight();
+        Rectangle dst_rect = compute_letterbox_rect(tex.width, tex.height, ww, wh);
+
 
         game_update(&s, &cd, &ds);
 
         UpdateTexture(tex, s.pixels);
-        DrawTexturePro(tex, (Rectangle){0, 0, tex.width, tex.height}, 
-                       (Rectangle){0, 0, tex.height * 3, tex.width * 3}, (Vector2){0, 0}, 0, WHITE);
-        // DrawTexturePro(tex, 
-        //                (Rectangle){0, 0, tex.width, tex.height}, 
-        //                dst_rect,
-        //                (Vector2){0, 0}, 0, 
-        //                WHITE);
+        DrawTexturePro(tex, (Rectangle){0, 0, tex.width, tex.height}, dst_rect, (Vector2){0, 0}, 0, WHITE);
         DrawFPS(10, 10);
         const char* info_text = TextFormat("POS: %f %f %f\nFOV: %f", cd.camera.pos.x, cd.camera.pos.y, cd.camera.pos.z, cd.camera.fov);
         DrawText(info_text, SCREEN_HEIGHT/20, SCREEN_WIDTH/20, 40, WHITE);
 
-        ClearBackground(BLACK);
         EndDrawing();
     }
 }

@@ -1,6 +1,7 @@
 #ifndef __COMMON_C__
 #define __COMMON_C__
 
+#include "include/raylib.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -21,6 +22,9 @@
 #define COMP_X (0)
 #define COMP_Y (1)
 #define COMP_Z (2)
+
+#define DEG_TO_RAD(deg) (deg*MATH_PI/180.0f)
+#define RAD_TO_DEG(rad) (rad*180.0f/MATH_PI)
 
 typedef union {
     struct { uint8_t r; uint8_t g; uint8_t b; uint8_t a; };
@@ -164,6 +168,14 @@ Vec3 vec3_cross(Vec3 v1, Vec3 v2) {
         .z = v1.x*v2.y - v1.y*v2.x,
     };
 }
+
+Vec2 vec3_to_vec2(Vec3 v3) {
+    return (Vec2) {
+        .x = v3.x,
+        .y = v3.y,
+    };
+}
+
 
 float cross2d(float p1_x, float p1_y, float p2_x, float p2_y) {
     return p1_x*p2_y - p1_y*p2_x;

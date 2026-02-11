@@ -1,12 +1,13 @@
 #include "render.c"
 #include <stdint.h>
 #include <stdio.h>
+#include <float.h>
 #include "common.c"
 
-#define SCREEN_RATIO_Y (16)
-#define SCREEN_RATIO_X (10)
+#define SCREEN_RATIO_X (4)
+#define SCREEN_RATIO_Y (3)
 
-#define SCREEN_FACTOR (50)
+#define SCREEN_FACTOR (200)
 #define SCREEN_WIDTH  (SCREEN_RATIO_X*SCREEN_FACTOR) 
 #define SCREEN_HEIGHT (SCREEN_RATIO_Y*SCREEN_FACTOR)
 
@@ -30,8 +31,20 @@ typedef struct {
     float held_time;
 } Button;
 
-static bool btn_is_pressed(Button btn) { return btn.pressed; }
-static bool btn_is_held(Button btn) { return btn.held; }
+static bool btn_is_pressed(Button btn) { 
+    return btn.pressed; 
+}
+static bool btn_is_held(Button btn) { 
+    return btn.held; 
+}
+
+typedef struct {
+    Vec3 pos;
+    Vec3 vel;
+    Vec3 acc;
+
+    float damp;
+} Entity;
 
 #define KEY_CHAR_END (257)
 typedef enum {
@@ -73,6 +86,8 @@ typedef enum {
     KEY_MOUSE_COUNT,
 } Key_Mouse;
 
+
+
 typedef struct {
     Vec2 pos;
     Vec2 delta;
@@ -87,48 +102,76 @@ typedef struct {
     float dt;
 } Core_Data;
 
-typedef struct {
-    Vec3 pos;
-    Vec3 vel;
-    Vec3 acc;
-
-    float damp;
-} Entity;
 
 typedef struct {
-    Object obj;
+    Object teapot;
+    Object sword;
 } Data_Struct;
 
 #define OUTFILE "./frames/"
 
+Model_Mesh teapot = {0};
+Model_Mesh sword= {0};
 void game_init(Core_Data* core, Data_Struct* ds) {
-    core->camera.pos.z = -10;
+    core->camera.pos.z = 0;
     core->camera.fov = 90;
 
-    bool ok = obj_load_file("./objects/teapot.obj", &ds->obj);
-    printf("no of triangle vertices %zu\n", ds->obj.vertices.count);
+    bool ok = mesh_load_from_objfile("./objects/teapot.obj", &teapot);
     if (!ok) return;
+
+    ok = mesh_load_from_objfile("./objects/sword.obj", &sword);
+    if (!ok) return;
+
+    ds->teapot.mesh = &teapot;
+    ds->teapot.transform.scale = (Vec3) {1, 1, 1};
+    ds->teapot.transform.pos   = (Vec3) {0, -2, 4};
+
+    ds->sword.mesh = &sword;
+    ds->sword.transform.scale = (Vec3) {0.1, 0.1, 0.1};
+    ds->sword.transform.pos   = (Vec3) {0, 4, 9};
 }
 
 void depth_buffer_clear(Screen* s) {
     for (int i = 0; i < s->height*s->width; i++) {
-        s->depth[i] = 0;
+        s->depth[i] = FLT_MAX;
     }
 } 
+
+
+void update_player_camera() {
+}
+
+
+
 
 void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
     screen_clear(s, 0xff181818);
     depth_buffer_clear(s);
 
+
+    #define CAM_WALK_SPEED (3)
+    #define CAM_RUN_SPEED  (CAM_WALK_SPEED*3)
+    
+    #define SPIN_SPEED (MATH_PI)
+
+    ds->teapot.transform.rot.y += SPIN_SPEED * core->dt;
+
+    float cam_speed = CAM_WALK_SPEED;
+
+    
+    // Camera stuff
+    #define CAMERA_SENS (MATH_PI/5)
     #define ZOOM_SPEED (10.0f)
     #define FOV_MIN    (30.0f) 
     #define FOV_MAX    (120.0f)
 
-    #define CAM_WALK_SPEED (3)
-    #define CAM_RUN_SPEED  (CAM_WALK_SPEED*3)
 
+    core->camera.fov = CLAMP(core->camera.fov, FOV_MIN, FOV_MAX);
 
-    float cam_speed = CAM_WALK_SPEED;
+    core->camera.rot.y -= core->mouse.delta.x * CAMERA_SENS*core->dt;
+    core->camera.rot.x += core->mouse.delta.y * CAMERA_SENS*core->dt;
+    core->camera.rot.x = CLAMP(core->camera.rot.x, DEG_TO_RAD(-69), DEG_TO_RAD(69));
+
 
     if (core->keyboard[' '].held) {
         cam_speed *= CAM_RUN_SPEED;
@@ -158,7 +201,8 @@ void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
         core->camera.fov += core->dt * ZOOM_SPEED;
     }
 
-    screen_draw_obj_new(s, &core->camera, &ds->obj);
+    screen_draw_obj(s, &core->camera, &ds->teapot);
+    screen_draw_obj(s, &core->camera, &ds->sword);
 }
 
 
