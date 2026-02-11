@@ -102,10 +102,10 @@ typedef struct {
 #define OUTFILE "./frames/"
 
 void game_init(Core_Data* core, Data_Struct* ds) {
-    core->camera.pos.z = -5;
+    core->camera.pos.z = -10;
     core->camera.fov = 90;
 
-    bool ok = obj_load_file("./objects/sword.obj", &ds->obj);
+    bool ok = obj_load_file("./objects/teapot.obj", &ds->obj);
     printf("no of triangle vertices %zu\n", ds->obj.vertices.count);
     if (!ok) return;
 }
@@ -120,11 +120,12 @@ void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
     screen_clear(s, 0xff181818);
     depth_buffer_clear(s);
 
-    #define CAM_WALK_SPEED (3)
-    #define CAM_RUN_SPEED  (CAM_WALK_SPEED*3)
     #define ZOOM_SPEED (10.0f)
     #define FOV_MIN    (30.0f) 
     #define FOV_MAX    (120.0f)
+
+    #define CAM_WALK_SPEED (3)
+    #define CAM_RUN_SPEED  (CAM_WALK_SPEED*3)
 
 
     float cam_speed = CAM_WALK_SPEED;
@@ -157,7 +158,7 @@ void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
         core->camera.fov += core->dt * ZOOM_SPEED;
     }
 
-    screen_draw_obj(s, &core->camera, &ds->obj);
+    screen_draw_obj_new(s, &core->camera, &ds->obj);
 }
 
 

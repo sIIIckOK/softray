@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <ctype.h>
 #include <math.h>
 #include <stddef.h>
@@ -12,7 +13,7 @@
 #include <sys/types.h>
 
 
-#define NEAR_CLIP_PLANE  (0.25)
+#define NEAR_CLIP_PLANE  (0.5)
 #define FOREGROUND_COLOR (0xff00ff00)
 #define MY_RED           (0xff0000ff)
 
@@ -26,6 +27,7 @@ typedef struct {
 typedef struct {
     Vec3 pos;
     float fov;
+    float near_clipping_dist;
 } Cam;
 
 typedef struct {
@@ -204,8 +206,12 @@ Vec2 vec3_to_vec2(Vec3 v3) {
     };
 }
 
+bool vector_clipped_by_near(Vec3 v, const Cam* c) {
+    return v.z < NEAR_CLIP_PLANE;
+}
+
 Vec3_Result screen_project(const Screen* s, const Cam* c, Vec3 p) {
-    if (p.z <= NEAR_CLIP_PLANE) {
+    if (vector_clipped_by_near(p, c)) {
         return (Vec3_Result) {
             .v = {0},
             .ok = false,
@@ -386,23 +392,139 @@ void scale_vec3(Vec3* v, float scale_factor) {
     v->z *= scale_factor;
 }
 
-void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
-    static int balls = 0;
+float lerpf(float a, float b, float t) {
+    return t * (b - a) + a;
+}
+
+float inv_lerpf(float a, float b, float v) {
+    return (v - a)/(b - a);
+}
+
+Vertex vertex_where_clipped(Vertex v1, Vertex v2, float clipping_point) { 
+    if (fabsf(v2.pos.z - v1.pos.z) < 1e-6f) {
+        return v1;
+    }
+    float t = inv_lerpf(v1.pos.z, v2.pos.z, clipping_point);
+    t = CLAMP(t, 0, 1);
+    Vertex wc = {0};
+    wc.pos.x = lerpf(v1.pos.x, v2.pos.x, t);
+    wc.pos.y = lerpf(v1.pos.y, v2.pos.y, t);
+    wc.pos.z = clipping_point;
+    return wc;
+}
+
+
+#define ASSERT(...) assert(__VA_ARGS__) 
+
+void screen_draw_obj_new(Screen* s, Cam* c, Object* obj) {
+    float scale_factor = 1;
+    for (int i = 0; i < obj->face_idx.count - 2; i += 3) {
+        Vertex unclipped_vs[3] = {0};
+        Vertex clipped_vs[3]   = {0};
+        size_t unclipped_vs_count = 0;
+        size_t clipped_vs_count   = 0;
+
+
+        for (int o = 0; o < 3; o++) { 
+            Vertex v = camera_project(c, obj->vertices.items[obj->face_idx.items[i+o]]);
+            scale_vec3(&v.pos, scale_factor);
+            if (vector_clipped_by_near(v.pos, c)) {
+                clipped_vs[clipped_vs_count++] = v;
+            } else {
+                unclipped_vs[unclipped_vs_count++] = v;
+            }
+        }
+        switch (clipped_vs_count) {
+            case 0: {
+                ASSERT(unclipped_vs_count == 3);
+                // the whole thing is in the screen
+                //
+
+                Vertex_Result vrs[3] = {0};
+                for (int o = 0; o < 3; o++) {
+                    vrs[o] = screen_vertex_project(s, c, unclipped_vs[o]);
+                    ASSERT(vrs[o].ok);
+                } 
+                vrs[0].v.color = (Col) {255, 0, 0, 255};
+                vrs[1].v.color = (Col) {155, 0, 0, 255};
+                vrs[2].v.color = (Col) {055, 0, 0, 255};
+                if (is_triangle_front(vrs[1].v.pos, vrs[0].v.pos, vrs[2].v.pos)) {
+                    screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
+                }
+            } break;
+            case 1: {
+                ASSERT(unclipped_vs_count == 2);
+                // 1 vertix is out
+
+                Vertex_Result vrs1[3] = {0};
+                Vertex_Result vrs2[3] = {0};
+
+                Vertex nv1 = vertex_where_clipped(clipped_vs[0], unclipped_vs[0], NEAR_CLIP_PLANE);
+                Vertex nv2 = vertex_where_clipped(clipped_vs[0], unclipped_vs[1], NEAR_CLIP_PLANE);
+
+                vrs1[0] = screen_vertex_project(s, c, unclipped_vs[0]);
+                vrs1[1] = screen_vertex_project(s, c, nv1);
+                vrs1[2] = screen_vertex_project(s, c, nv2);
+
+                vrs1[0].v.color = (Col) {255, 0, 0, 255};
+                vrs1[1].v.color = (Col) {155, 0, 0, 255};
+                vrs1[2].v.color = (Col) {055, 0, 0, 255};
+
+
+
+                vrs2[0] = screen_vertex_project(s, c, nv2);
+                vrs2[1] = screen_vertex_project(s, c, unclipped_vs[1]);
+                vrs2[2] = screen_vertex_project(s, c, unclipped_vs[0]);
+
+                vrs2[0].v.color = (Col) {255, 0, 0, 255};
+                vrs2[1].v.color = (Col) {155, 0, 0, 255};
+                vrs2[2].v.color = (Col) {055, 0, 0, 255};
+
+                // not culling clipped triangles
+                screen_draw_triangle(s, vrs1[0].v, vrs1[1].v, vrs1[2].v);
+                screen_draw_triangle(s, vrs2[0].v, vrs2[1].v, vrs2[2].v);
+            } break;
+            case 2: {
+                ASSERT(unclipped_vs_count == 1);
+                // 2 vertices out
+
+                Vertex_Result vrs[3] = {0};
+
+                Vertex nv1 = vertex_where_clipped(clipped_vs[0], unclipped_vs[0], NEAR_CLIP_PLANE);
+                Vertex nv2 = vertex_where_clipped(clipped_vs[1], unclipped_vs[0], NEAR_CLIP_PLANE);
+
+                vrs[0] = screen_vertex_project(s, c, unclipped_vs[0]);
+                vrs[1] = screen_vertex_project(s, c, nv1);
+                vrs[2] = screen_vertex_project(s, c, nv2);
+
+                vrs[0].v.color = (Col) {255, 0, 0, 255};
+                vrs[1].v.color = (Col) {155, 0, 0, 255};
+                vrs[2].v.color = (Col) {055, 0, 0, 255};
+
+
+                // not culling clipped triangle
+                screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
+            } break;
+            case 3: break;
+        }
+    }
+}
+void screen_draw_obj_(Screen* s, Cam* c, Object* obj) {
+    float scale_factor = 1;
     for (int i = 0; i < obj->face_idx.count - 2; i += 3) {
         Vertex v1 = obj->vertices.items[obj->face_idx.items[i+2]];
         Vertex v2 = obj->vertices.items[obj->face_idx.items[i+1]];
         Vertex v3 = obj->vertices.items[obj->face_idx.items[i+0]];
 
-        float scale_factor = 1;
         scale_vec3(&v1.pos, scale_factor);
         scale_vec3(&v2.pos, scale_factor);
         scale_vec3(&v3.pos, scale_factor);
+
         Vertex_Result sv1 = screen_vertex_project(s, c, camera_project(c, v1));
         Vertex_Result sv2 = screen_vertex_project(s, c, camera_project(c, v2));
         Vertex_Result sv3 = screen_vertex_project(s, c, camera_project(c, v3));
-    
-        if (!sv1.ok || !sv2.ok || !sv3.ok) continue;
 
+        if (!sv1.ok || !sv2.ok || !sv3.ok) continue;
 
         sv1.v.color = (Col) {255, 0, 0, 255};
         sv2.v.color = (Col) {155, 0, 0, 255};
@@ -618,7 +740,6 @@ bool obj_load_file(char* obj_path, Object* obj) {
             da_append(&face_idx, c);
 
             String_View last_ele = parser_seek_until_chars(&p, "/ \n");
-            printf("|"SV_FORMAT"|\n", SV_ARGS(last_ele));
             char* endptr = NULL;
             size_t d = strtol(last_ele.data, &endptr, 10) - 1;
             if (!(endptr == last_ele.data) && d != 0) {
@@ -630,7 +751,6 @@ bool obj_load_file(char* obj_path, Object* obj) {
             face_count++;
         }
     }
-    printf(":::face count %zu\n", face_count);
 
     obj->vertices = vertices;
     obj->face_idx = face_idx;
