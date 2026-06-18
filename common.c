@@ -224,7 +224,7 @@ float triangle2d_area(Vec2 v1, Vec2 v2, Vec2 v3) {
         (xs)->items[(xs)->count++] = (x);                                            \
     } while (0)
 
-char *read_file_as_string(const char *path) {
+char *read_file_to_string(const char *path) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
 
@@ -239,6 +239,7 @@ char *read_file_as_string(const char *path) {
     char *buffer = (char *)malloc(size + 1);
     if (!buffer) {
         fclose(f);
+        printf("Could not open file `%s`\n", path);
         return NULL;
     }
 
@@ -247,6 +248,7 @@ char *read_file_as_string(const char *path) {
 
     if (read != (size_t)size) {
         free(buffer);
+        printf("Could not read file `%s`\n", path);
         return NULL;
     }
 

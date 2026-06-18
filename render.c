@@ -22,6 +22,7 @@ typedef struct {
     uint32_t* pixels;
     size_t width;
     size_t height;
+    size_t stride;
 } Screen;
 
 typedef struct {
@@ -49,8 +50,15 @@ typedef struct {
 } Indices;
 
 typedef struct {
+    Vec2* items;
+    size_t count;
+    size_t capacity;
+} Vec2s;
+
+typedef struct {
     Vertices vertices;
-    Indices face_idx;
+    Indices  face_idx;
+    Vec2s    uv;
 } Model_Mesh;
 
 typedef struct {
@@ -101,7 +109,7 @@ bool screen_to_ppm(const Screen* screen, char* outpath) {
 
 static inline void screen_put_pixel(Screen* screen, int x, int y, uint32_t color) {
     if (x >= 0 && y >= 0 && 
-        x < screen->width && y < screen->height) {
+            x < screen->width && y < screen->height) {
         screen->pixels[x + y * screen->width] = color;
     }
 }
@@ -136,7 +144,16 @@ Vec3 vec3_rot_xyz(Vec3 v, Vec3 rot) {
     return v;
 }
 
-Vec3 vec3_rot_yxz(Vec3 v, Vec3 rot) {
+Vec3 vec3_rot_zyx(Vec3 v, Vec3 rot) {
+    {
+        float c = cosf(rot.z);
+        float s = sinf(rot.z);
+        float x = v.x * c - v.y * s;
+        float y = v.x * s + v.y * c;
+        v.x = x;
+        v.y = y;
+    }
+
     {
         float c = cosf(rot.y);
         float s = sinf(rot.y);
@@ -153,16 +170,6 @@ Vec3 vec3_rot_yxz(Vec3 v, Vec3 rot) {
         float z = v.y * s + v.z * c;
         v.y = y;
         v.z = z;
-    }
-
-
-    {
-        float c = cosf(rot.z);
-        float s = sinf(rot.z);
-        float x = v.x * c - v.y * s;
-        float y = v.x * s + v.y * c;
-        v.x = x;
-        v.y = y;
     }
     return v;
 }
@@ -184,9 +191,9 @@ static inline uint32_t screen_get_color(const Screen* screen, int x, int y) {
 }
 
 void screen_draw_rect(Screen* screen, 
-                      int x, int y, 
-                      int w, int h, 
-                      uint32_t color) {
+        int x, int y, 
+        int w, int h, 
+        uint32_t color) {
     for (int dy = y; dy < y + h; dy++) {
         for (int dx = x; dx < x + w; dx++) {
             screen_put_pixel(screen, dx, dy, color);
@@ -195,9 +202,9 @@ void screen_draw_rect(Screen* screen,
 }
 
 void screen_draw_circle(Screen* screen, 
-                      int x, int y, 
-                      int r,
-                      uint32_t color) {
+        int x, int y, 
+        int r,
+        uint32_t color) {
     for (int dy = y - r; dy < y + r; dy++) {
         int _dy = y - dy;
         int _dy2 = _dy*_dy;
@@ -212,9 +219,9 @@ void screen_draw_circle(Screen* screen,
 
 // Uses Bresenham's Algorithm
 void screen_draw_line(Screen* screen, 
-                      int start_x, int start_y, 
-                      int end_x, int end_y,
-                      uint32_t color) 
+        int start_x, int start_y, 
+        int end_x, int end_y,
+        uint32_t color) 
 {
     int x = start_x;
     int y = start_y;
@@ -241,10 +248,10 @@ void screen_draw_line(Screen* screen,
 }
 
 void screen_draw_line_thickness(Screen* screen, 
-                      int start_x, int start_y, 
-                      int end_x, int end_y,
-                      int thickness,
-                      uint32_t color) 
+        int start_x, int start_y, 
+        int end_x, int end_y,
+        int thickness,
+        uint32_t color) 
 {
     int x = start_x;
     int y = start_y;
@@ -326,11 +333,11 @@ void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
     Vec2 p2 = vec3_to_vec2(v2.pos);
     Vec2 p3 = vec3_to_vec2(v3.pos);
 
-    int min_x = ceilf(MIN(p1.x, MIN(p2.x, p3.x)));
-    int max_x = floorf(MAX(p1.x, MAX(p2.x, p3.x)));
-    int min_y = ceilf(MIN(p1.y, MIN(p2.y, p3.y)));
-    int max_y = floorf(MAX(p1.y, MAX(p2.y, p3.y)));
-
+    int min_x = MAX(0,         ceilf(MIN(p1.x, MIN(p2.x, p3.x))));
+    int min_y = MAX(0,         ceilf(MIN(p1.y, MIN(p2.y, p3.y))));
+    int max_x = MIN(s->width,  floorf(MAX(p1.x, MAX(p2.x, p3.x))));
+    int max_y = MIN(s->height, floorf(MAX(p1.y, MAX(p2.y, p3.y))));
+    
     float tri_area = edge_coeff(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
     if (tri_area == 0.0f) return;
     float inv_area = 1.0f / tri_area;
@@ -351,23 +358,29 @@ void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
     float e2_row = edge_coeff(p2.x, p2.y, p3.x, p3.y, start_x, start_y);
     float e3_row = edge_coeff(p3.x, p3.y, p1.x, p1.y, start_x, start_y);
 
+    float gap = s->stride - s->width;
+
     for (float y = min_y; y <= max_y; y++) {
         float e1 = e1_row;
         float e2 = e2_row;
         float e3 = e3_row;
 
-        for (float x = min_x; x <= max_x; x++) {
+        for (float x = min_x + gap; x <= max_x; x++) {
             if ((e1 <= 0 && e2 <= 0 && e3 <= 0) || (e1 >= 0 && e2 >= 0 && e3 >= 0)) 
                 if (x >= 0 && y >= 0 && x < s->width && y < s->height) {
-                float w1 = e1 * inv_area;
-                float w2 = e2 * inv_area;
-                float w3 = e3 * inv_area;
+                    float w1 = e1 * inv_area;
+                    float w2 = e2 * inv_area;
+                    float w3 = e3 * inv_area;
 
-                    float new_pixel_depth = v1.pos.z * w1 + v2.pos.z * w2 + v3.pos.z * w3;
+                    float invz1 = 1.0f / v1.pos.z;
+                    float invz2 = 1.0f / v2.pos.z;
+                    float invz3 = 1.0f / v3.pos.z;
+
+                    float new_pixel_depth = invz1 * w1 + invz2 * w2 + invz3 * w3;
                     int idx = (int)x + (s->width * (int)y);
                     float old_pixel_depth = s->depth[idx];
 
-                    if (old_pixel_depth > new_pixel_depth) {
+                    if (old_pixel_depth < new_pixel_depth) {
                         //draw new_pixel
                         s->depth[idx] = new_pixel_depth;
                         Col color;
@@ -397,7 +410,7 @@ void screen_draw_triangle_deprecate(Screen* s, Vertex v1, Vertex v2, Vertex v3) 
     Vec2 p1 = vec3_to_vec2(v1.pos);
     Vec2 p2 = vec3_to_vec2(v2.pos);
     Vec2 p3 = vec3_to_vec2(v3.pos);
-    
+
     float big_tri_area = triangle2d_area(p1, p2, p3);
     float inv_big_tri_area = 1.0/big_tri_area;
 
@@ -448,7 +461,7 @@ Vertex camera_project(const Cam* c, Vertex v) {
     v.pos = vec3_sub(v.pos, c->pos);
 
     Vec3 inv_rot = { -c->rot.x, -c->rot.y, -c->rot.z };
-    v.pos = vec3_rot_yxz(v.pos, inv_rot);
+    v.pos = vec3_rot_zyx(v.pos, inv_rot);
 
     return v;
 }
@@ -485,9 +498,16 @@ Vertex vertex_where_clipped(Vertex v1, Vertex v2, float clipping_point) {
 
 void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
     float scale_factor = 0.3;
-    Col col1 = (Col){  60, 130, 120, 255 };
-    Col col2 = (Col){ 120,  70, 140, 255 };
-    Col col3 = (Col){ 140, 120,  60, 255 };
+    static const Col debug_col[3] = {
+        {  0, 0, 255, 100 },
+        {  0, 0, 255, 200 },
+        {  0, 0, 255, 255 },
+    };
+    // static const Col debug_col[3] = {
+    //     {  60, 130, 120, 255 },
+    //     { 120,  70, 140, 255 },
+    //     { 140, 120,  60, 255 },
+    // };
     for (int i = 0; i < obj->mesh->face_idx.count - 2; i += 3) {
         Vertex unclipped_vs[3] = {0};
         Vertex clipped_vs[3]   = {0};
@@ -506,105 +526,76 @@ void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
         }
         switch (clipped_vs_count) {
             case 0: {
-                ASSERT(unclipped_vs_count == 3);
-                // the whole thing is in the screen
-                //
+                        ASSERT(unclipped_vs_count == 3);
+                        // the whole thing is in the screen
+                        //
 
-                Vertex_Result vrs[3] = {0};
-                for (int o = 0; o < 3; o++) {
-                    vrs[o] = screen_vertex_project(s, c, unclipped_vs[o]);
-                    ASSERT(vrs[o].ok);
-                } 
-                vrs[0].v.color = col1;
-                vrs[1].v.color = col2;
-                vrs[2].v.color = col3;
-                if (is_triangle_front(vrs[1].v.pos, vrs[0].v.pos, vrs[2].v.pos)) {
-                    screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
-                }
-            } break;
+                        Vertex_Result vrs[3] = {0};
+                        for (int o = 0; o < 3; o++) {
+                            vrs[o] = screen_vertex_project(s, c, unclipped_vs[o]);
+                            ASSERT(vrs[o].ok);
+                        } 
+                        vrs[0].v.color = debug_col[0];
+                        vrs[1].v.color = debug_col[1];
+                        vrs[2].v.color = debug_col[2];
+                        if (is_triangle_front(vrs[1].v.pos, vrs[0].v.pos, vrs[2].v.pos)) {
+                            screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
+                        }
+                    } break;
             case 1: {
-                ASSERT(unclipped_vs_count == 2);
-                // 1 vertix is out
+                        ASSERT(unclipped_vs_count == 2);
+                        // 1 vertix is out
 
-                Vertex_Result vrs1[3] = {0};
-                Vertex_Result vrs2[3] = {0};
+                        Vertex_Result vrs1[3] = {0};
+                        Vertex_Result vrs2[3] = {0};
 
-                Vertex nv1 = vertex_where_clipped(clipped_vs[0], unclipped_vs[0], NEAR_CLIP_PLANE);
-                Vertex nv2 = vertex_where_clipped(clipped_vs[0], unclipped_vs[1], NEAR_CLIP_PLANE);
+                        Vertex nv1 = vertex_where_clipped(clipped_vs[0], unclipped_vs[0], NEAR_CLIP_PLANE);
+                        Vertex nv2 = vertex_where_clipped(clipped_vs[0], unclipped_vs[1], NEAR_CLIP_PLANE);
 
-                vrs1[0] = screen_vertex_project(s, c, unclipped_vs[0]);
-                vrs1[1] = screen_vertex_project(s, c, nv1);
-                vrs1[2] = screen_vertex_project(s, c, nv2);
+                        vrs1[0] = screen_vertex_project(s, c, unclipped_vs[0]);
+                        vrs1[1] = screen_vertex_project(s, c, nv1);
+                        vrs1[2] = screen_vertex_project(s, c, nv2);
 
-                vrs1[0].v.color = col1;
-                vrs1[1].v.color = col2;
-                vrs1[2].v.color = col3;
+                        vrs1[0].v.color = debug_col[0];
+                        vrs1[1].v.color = debug_col[1];
+                        vrs1[2].v.color = debug_col[2];
 
 
 
-                vrs2[0] = screen_vertex_project(s, c, nv2);
-                vrs2[1] = screen_vertex_project(s, c, unclipped_vs[1]);
-                vrs2[2] = screen_vertex_project(s, c, unclipped_vs[0]);
+                        vrs2[0] = screen_vertex_project(s, c, nv2);
+                        vrs2[1] = screen_vertex_project(s, c, unclipped_vs[1]);
+                        vrs2[2] = screen_vertex_project(s, c, unclipped_vs[0]);
 
-                vrs2[0].v.color = col1;
-                vrs2[1].v.color = col2; 
-                vrs2[2].v.color = col3;
+                        vrs2[0].v.color = debug_col[0];
+                        vrs2[1].v.color = debug_col[1]; 
+                        vrs2[2].v.color = debug_col[2];
 
-                // not culling clipped triangles
-                screen_draw_triangle(s, vrs1[0].v, vrs1[1].v, vrs1[2].v);
-                screen_draw_triangle(s, vrs2[0].v, vrs2[1].v, vrs2[2].v);
-            } break;
+                        // not culling clipped triangles
+                        screen_draw_triangle(s, vrs1[0].v, vrs1[1].v, vrs1[2].v);
+                        screen_draw_triangle(s, vrs2[0].v, vrs2[1].v, vrs2[2].v);
+                    } break;
             case 2: {
-                ASSERT(unclipped_vs_count == 1);
-                // 2 vertices out
+                        ASSERT(unclipped_vs_count == 1);
+                        // 2 vertices out
 
-                Vertex_Result vrs[3] = {0};
+                        Vertex_Result vrs[3] = {0};
 
-                Vertex nv1 = vertex_where_clipped(clipped_vs[0], unclipped_vs[0], NEAR_CLIP_PLANE);
-                Vertex nv2 = vertex_where_clipped(clipped_vs[1], unclipped_vs[0], NEAR_CLIP_PLANE);
+                        Vertex nv1 = vertex_where_clipped(clipped_vs[0], unclipped_vs[0], NEAR_CLIP_PLANE);
+                        Vertex nv2 = vertex_where_clipped(clipped_vs[1], unclipped_vs[0], NEAR_CLIP_PLANE);
 
-                vrs[0] = screen_vertex_project(s, c, unclipped_vs[0]);
-                vrs[1] = screen_vertex_project(s, c, nv1);
-                vrs[2] = screen_vertex_project(s, c, nv2);
+                        vrs[0] = screen_vertex_project(s, c, unclipped_vs[0]);
+                        vrs[1] = screen_vertex_project(s, c, nv1);
+                        vrs[2] = screen_vertex_project(s, c, nv2);
 
-                vrs[0].v.color = col1;
-                vrs[1].v.color = col1;
-                vrs[2].v.color = col1;
+                        vrs[0].v.color = debug_col[0];
+                        vrs[1].v.color = debug_col[1];
+                        vrs[2].v.color = debug_col[2];
 
 
-                // not culling clipped triangle
-                screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
-            } break;
+                        // not culling clipped triangle
+                        screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
+                    } break;
             case 3: break;
-        }
-    }
-}
-
-void screen_draw_obj_deprecate(Screen* s, Cam* c, Object* obj) {
-    float scale_factor = 1;
-    Col col1 = (Col) {255, 0, 0, 255};
-    Col col2 = (Col) {155, 0, 0, 255};
-    Col col3 = (Col) {055, 0, 0, 255};
-    for (int i = 0; i < obj->mesh->face_idx.count - 2; i += 3) {
-        Vertex v1 = obj->mesh->vertices.items[obj->mesh->face_idx.items[i+2]];
-        Vertex v2 = obj->mesh->vertices.items[obj->mesh->face_idx.items[i+1]];
-        Vertex v3 = obj->mesh->vertices.items[obj->mesh->face_idx.items[i+0]];
-
-        scale_vec3(&v1.pos, scale_factor);
-        scale_vec3(&v2.pos, scale_factor);
-        scale_vec3(&v3.pos, scale_factor);
-
-        Vertex_Result sv1 = screen_vertex_project(s, c, camera_project(c, v1));
-        Vertex_Result sv2 = screen_vertex_project(s, c, camera_project(c, v2));
-        Vertex_Result sv3 = screen_vertex_project(s, c, camera_project(c, v3));
-
-        if (!sv1.ok || !sv2.ok || !sv3.ok) continue;
-
-        sv1.v.color = col1;
-        sv2.v.color = col2;
-        sv3.v.color = col3;
-        if (is_triangle_front(sv1.v.pos, sv2.v.pos, sv3.v.pos)) {
-            screen_draw_triangle(s, sv1.v, sv2.v, sv3.v);
         }
     }
 }
@@ -615,7 +606,7 @@ void screen_draw_obj_points(Screen* s, const Cam* c, Object* obj) {
         v = camera_project(c, v);
 
         Vertex_Result rv = screen_vertex_project(s, c, (Vertex){.pos = v.pos, .color = v.color});
-        #define PT_SIZE 10
+#define PT_SIZE 10
         if (rv.ok) screen_draw_rect(s, rv.v.pos.x, rv.v.pos.y, PT_SIZE, PT_SIZE, 0xffffffff);
     }
 }
@@ -686,7 +677,7 @@ bool sv_starts_with(String_View sv, char* prefix) {
 
 void parser_skip_spaces(Parser* p) {
     while (p->ptr < p->content.len && 
-        isspace(p->content.data[p->ptr])) p->ptr++;
+            isspace(p->content.data[p->ptr])) p->ptr++;
 }
 
 String_View parser_get_line(Parser* p) {
@@ -751,10 +742,12 @@ String_View parser_seek_until_chars(Parser* const p, char* str) { // NOTE(@siiic
 
 
 bool mesh_load_from_objfile(char* obj_path, Model_Mesh* mesh) {
-    Vertices vertices = {0};
-    Indices face_idx = {0};
+    Vertices    vertices = {0};
+    Indices     face_idx = {0};
+    Vec2s       uvs      = {0};
+    String_View mtl_lib_fp = {0};
 
-    char* content = read_file_as_string(obj_path);
+    char* content = read_file_to_string(obj_path);
     if (!content) { 
         printf("ERROR: Could not find obj file `%s` to read\n", obj_path);
         return false; 
@@ -763,25 +756,34 @@ bool mesh_load_from_objfile(char* obj_path, Model_Mesh* mesh) {
     Parser p = parser_new_from_cstr(content);
 
     size_t face_count = 0;
-    
-    String_View tok = parser_next_token(&p);
+
+    String_View tok;
+
     while (p.ptr < p.content.len) {
         tok = parser_next_token(&p);
         parser_skip_spaces(&p);
         if (sv_starts_with(tok, "#")) {
             parser_skip_to_next_line(&p);
         }
-        if (sv_cmp_cstr(tok, "v")) {
+        if (sv_cmp_cstr(tok, "mtllib")) {
+            mtl_lib_fp = parser_next_token(&p);
+        } else if (sv_cmp_cstr(tok, "v")) {
             float x = strtof(parser_next_token(&p).data, NULL);
             float y = strtof(parser_next_token(&p).data, NULL);
             float z = strtof(parser_next_token(&p).data, NULL);
-            
+
             Vertex v = (Vertex) {
                 .pos.x = x,
                 .pos.y = y,
                 .pos.z = z,
             };
             da_append(&vertices, v);
+        } else if (sv_cmp_cstr(tok, "vt")) {
+            float u = strtof(parser_next_token(&p).data, NULL);
+            float v = strtof(parser_next_token(&p).data, NULL);
+
+            Vec2 uv = (Vec2) { u, v };
+            da_append(&uvs, uv);
         } else if (sv_cmp_cstr(tok, "f")) {
 
             size_t a = strtol(parser_next_token_chars(&p, "/ ").data, NULL, 10) - 1;
@@ -806,6 +808,27 @@ bool mesh_load_from_objfile(char* obj_path, Model_Mesh* mesh) {
                 parser_skip_to_next_line(&p);
             }
             face_count++;
+        }
+    }
+
+    if (mtl_lib_fp.len) {
+        mesh->uv = uvs;
+
+        mtl_lib_fp.data[mtl_lib_fp.len] = 0;
+        char* mtl_lib_f = read_file_to_string(mtl_lib_fp.data);
+        if (!mtl_lib_f) { 
+            printf("ERROR: Could not find file `%s` to read\n", mtl_lib_fp.data);
+        } else {
+            printf("%s\n", mtl_lib_f);
+            Parser mp = parser_new_from_cstr(content);
+            String_View tok;
+            while (p.ptr < p.content.len) {
+                if (sv_cmp_cstr(tok, "map_Kd")) {
+                    String_View tok = parser_next_token(&p);
+                    printf("ping\n");
+                }
+                String_View tok = parser_next_token(&p);
+            }
         }
     }
 

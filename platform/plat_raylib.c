@@ -177,6 +177,7 @@ int main(int argc, char** argv) {
         .pixels = screen_pixels,
         .width = SCREEN_WIDTH,
         .height = SCREEN_HEIGHT,
+        .stride = SCREEN_WIDTH,
         .depth = screen_pixels_depth,
     };
     Data_Struct ds = {0};
@@ -198,7 +199,7 @@ int main(int argc, char** argv) {
     const int MONITOR_WIDTH = GetScreenWidth();
     const int MONITOR_HEIGHT = GetScreenHeight();
 
-    #define FPS 1000
+    #define FPS 60
     SetTargetFPS(FPS);
 
     while(!WindowShouldClose()) {
@@ -213,7 +214,6 @@ int main(int argc, char** argv) {
         int ww = GetScreenWidth();
         int wh = GetScreenHeight();
         Rectangle dst_rect = compute_letterbox_rect(tex.width, tex.height, ww, wh);
-
 
         game_update(&s, &cd, &ds);
 
