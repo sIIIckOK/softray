@@ -2,7 +2,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <float.h>
-#include "common.c"
+
+#__declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+include "common.c"
 
 #define SCREEN_RATIO_X (4)
 #define SCREEN_RATIO_Y (3)
