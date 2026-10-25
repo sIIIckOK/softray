@@ -1,16 +1,14 @@
-#include "render.c"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <float.h>
+#include "common.c"
+#include "render.c"
 
-__declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
-__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-include "common.c"
+#define SCREEN_RATIO_X (16)
+#define SCREEN_RATIO_Y (10)
 
-#define SCREEN_RATIO_X (4)
-#define SCREEN_RATIO_Y (3)
-
-#define SCREEN_FACTOR (200)
+#define SCREEN_FACTOR (50)
 #define SCREEN_WIDTH  (SCREEN_RATIO_X*SCREEN_FACTOR) 
 #define SCREEN_HEIGHT (SCREEN_RATIO_Y*SCREEN_FACTOR)
 
@@ -173,7 +171,7 @@ void game_init(Core_Data* core, Data_Struct* ds) {
 
     ds->teapot.mesh = &teapot;
     ds->teapot.transform.scale = (Vec3) {1, 1, 1};
-    ds->teapot.transform.pos   = (Vec3) {0, -2, 4};
+    ds->teapot.transform.pos   = (Vec3) {10, 10, 10};
     ds->teapot.transform.rot.y += MATH_PI/2;
 
     ds->sword.mesh = &sword;
@@ -182,11 +180,12 @@ void game_init(Core_Data* core, Data_Struct* ds) {
 
     ds->monkey.mesh = &monkey;
     ds->monkey.transform.scale = (Vec3) {1, 1, 1};
-    ds->monkey.transform.pos   = (Vec3) {10, 10, 10};
+    ds->monkey.transform.pos   = (Vec3) {0, 0, 4};
+    ds->monkey.transform.rot.y += MATH_PI;
 }
 
 void depth_buffer_clear(Screen* s) {
-    for (int i = 0; i < s->height*s->width; i++) {
+    for (int i = 0; i < s->height*s->stride; i++) {
         s->depth[i] = 0;
     }
 } 
@@ -217,7 +216,7 @@ void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
 
     core->camera.fov = CLAMP(core->camera.fov, FOV_MIN, FOV_MAX);
 
-    core->camera.rot.y -= core->mouse.delta.x * CAMERA_SENS*core->dt;
+    core->camera.rot.y += core->mouse.delta.x * CAMERA_SENS*core->dt;
     core->camera.rot.x += core->mouse.delta.y * CAMERA_SENS*core->dt;
     core->camera.rot.x = CLAMP(core->camera.rot.x, DEG_TO_RAD(-69), DEG_TO_RAD(69));
 
@@ -232,9 +231,9 @@ void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
     }
 
     if (core->keyboard['A'].held) {
-        core->camera.pos.x += core->dt*cam_speed;
-    } else if (core->keyboard['D'].held) {
         core->camera.pos.x -= core->dt*cam_speed;
+    } else if (core->keyboard['D'].held) {
+        core->camera.pos.x += core->dt*cam_speed;
     }
 
     if (core->keyboard['J'].held) {

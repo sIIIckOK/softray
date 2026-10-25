@@ -93,7 +93,7 @@ bool screen_to_ppm(const Screen* screen, char* outpath) {
     fwrite(temp, strlen(temp), 1, f);
     for (int dy = 0; dy < screen->height; dy++) {
         for (int dx = 0; dx < screen->width; dx++) {
-            uint32_t p = screen->pixels[dx + dy * screen->width];
+            uint32_t p = screen->pixels[dx + dy * screen->stride];
             uint8_t r = p >> 8*0;
             uint8_t g = p >> 8*1;
             uint8_t b = p >> 8*2;
@@ -110,7 +110,7 @@ bool screen_to_ppm(const Screen* screen, char* outpath) {
 static inline void screen_put_pixel(Screen* screen, int x, int y, uint32_t color) {
     if (x >= 0 && y >= 0 && 
             x < screen->width && y < screen->height) {
-        screen->pixels[x + y * screen->width] = color;
+        screen->pixels[x + y * screen->stride] = color;
     }
 }
 
@@ -184,8 +184,9 @@ Vec3 vector_apply_xform(Vec3 v, Xform xform) {
 }
 
 static inline uint32_t screen_get_color(const Screen* screen, int x, int y) {
-    if (x < screen->width && y < screen->height) {
-        return screen->pixels[x + y * screen->width];
+    if (x >= 0 && y >= 0 &&
+            x < screen->width && y < screen->height) {
+        return screen->pixels[x + y * screen->stride];
     }
     return 0;
 }
@@ -293,16 +294,16 @@ Vec3_Result screen_project(const Screen* s, const Cam* c, Vec3 p) {
             .ok = false,
         };
     }
-    float aspect = (float)s->width/s->height;
+    float aspect_ratio = (float)s->width/s->height;
     float fov_rad = DEG_TO_RAD(c->fov);
-    float fov_x = (tan(fov_rad/2) * 2) * aspect;
+    float fov_x = (tan(fov_rad/2) * 2) * aspect_ratio;
     float fov_y = (tan(fov_rad/2) * 2);
-    float x = p.x/(-p.z * fov_x);
-    float y = p.y/(-p.z * fov_y);
+    float x = p.x/(p.z * fov_x);
+    float y = p.y/(p.z * fov_y);
     return (Vec3_Result) {
         .v = {
             .x = ((x + 1)/2)*s->width,
-            .y = ((y + 1)/2)*s->height,
+            .y = ((1 - y)/2)*s->height,
             .z = p.z
         },
         .ok = true,
@@ -321,7 +322,7 @@ bool is_triangle_front(Vec3 v1, Vec3 v2, Vec3 v3) {
     Vec3 va = vec3_sub(v2, v1);
     Vec3 vb = vec3_sub(v3, v1);
 
-    return cross2d(va.x, va.y, vb.x, vb.y) > 0;
+    return cross2d(va.x, va.y, vb.x, vb.y) < 0;
 }
 
 static inline float edge_coeff(float x0, float y0, float x1, float y1, float px, float py) {
@@ -329,17 +330,17 @@ static inline float edge_coeff(float x0, float y0, float x1, float y1, float px,
 }
 
 void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
-    Vec2 p1 = vec3_to_vec2(v1.pos);
-    Vec2 p2 = vec3_to_vec2(v2.pos);
-    Vec2 p3 = vec3_to_vec2(v3.pos);
+    Vec3 p1 = v1.pos;
+    Vec3 p2 = v2.pos;
+    Vec3 p3 = v3.pos;
 
     int min_x = MAX(0,         ceilf(MIN(p1.x, MIN(p2.x, p3.x))));
     int min_y = MAX(0,         ceilf(MIN(p1.y, MIN(p2.y, p3.y))));
-    int max_x = MIN(s->width,  floorf(MAX(p1.x, MAX(p2.x, p3.x))));
-    int max_y = MIN(s->height, floorf(MAX(p1.y, MAX(p2.y, p3.y))));
+    int max_x = MIN(s->width - 1,  floorf(MAX(p1.x, MAX(p2.x, p3.x))));
+    int max_y = MIN(s->height - 1, floorf(MAX(p1.y, MAX(p2.y, p3.y))));
     
     float tri_area = edge_coeff(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
-    if (tri_area == 0.0f) return;
+    if (fabs(tri_area) < 1e-2f) return;
     float inv_area = 1.0f / tri_area;
 
     float e1_dx =  (p2.y - p1.y);
@@ -358,14 +359,12 @@ void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
     float e2_row = edge_coeff(p2.x, p2.y, p3.x, p3.y, start_x, start_y);
     float e3_row = edge_coeff(p3.x, p3.y, p1.x, p1.y, start_x, start_y);
 
-    float gap = s->stride - s->width;
-
     for (float y = min_y; y <= max_y; y++) {
         float e1 = e1_row;
         float e2 = e2_row;
         float e3 = e3_row;
 
-        for (float x = min_x + gap; x <= max_x; x++) {
+        for (float x = min_x; x <= max_x; x++) {
             if ((e1 <= 0 && e2 <= 0 && e3 <= 0) || (e1 >= 0 && e2 >= 0 && e3 >= 0)) 
                 if (x >= 0 && y >= 0 && x < s->width && y < s->height) {
                     float w1 = e1 * inv_area;
@@ -377,7 +376,7 @@ void screen_draw_triangle(Screen* s, Vertex v1, Vertex v2, Vertex v3) {
                     float invz3 = 1.0f / v3.pos.z;
 
                     float new_pixel_depth = invz1 * w1 + invz2 * w2 + invz3 * w3;
-                    int idx = (int)x + (s->width * (int)y);
+                    int idx = (int)x + (s->stride * (int)y);
                     float old_pixel_depth = s->depth[idx];
 
                     if (old_pixel_depth < new_pixel_depth) {
@@ -417,11 +416,11 @@ void screen_draw_triangle_deprecate(Screen* s, Vertex v1, Vertex v2, Vertex v3) 
     float min_x = ceilf(MIN(p1.x, MIN(p2.x, p3.x)));
     float max_x = floorf(MAX(p1.x, MAX(p2.x, p3.x)));
 
-    float min_y = ceilf(MIN(p1.y, MIN(p2.y, p3.y)));
-    float max_y = floorf(MAX(p1.y, MAX(p2.y, p3.y)));
+    float min_y = ceilf(MIN(p1.y, MIN(p2.y, p3.y)) + 1);
+    float max_y = floorf(MAX(p1.y, MAX(p2.y, p3.y)) + 1);
 
-    for (float y = min_y + 0.5; y <= max_y; y++) {
-        for (float x = min_x + 0.5; x <= max_x; x++) {
+    for (float y = min_y + 0.5; y < max_y; y++) {
+        for (float x = min_x + 0.5; x < max_x; x++) {
             Vec2 this_point = { x, y };
             if (!is_point_in_triangle(this_point, p1, p2, p3)) 
                 continue;
@@ -480,17 +479,30 @@ float inv_lerpf(float a, float b, float v) {
     return (v - a)/(b - a);
 }
 
+Vertex vertex_lerp(Vertex a, Vertex b, float t) {
+    Vertex result = {0};
+
+    result.pos.x = lerpf(a.pos.x, b.pos.x, t);
+    result.pos.y = lerpf(a.pos.y, b.pos.y, t);
+    result.pos.z = lerpf(a.pos.z, b.pos.z, t);
+
+    result.color.r = lerpf(a.color.r, b.color.r, t);
+    result.color.g = lerpf(a.color.g, b.color.g, t);
+    result.color.b = lerpf(a.color.b, b.color.b, t);
+    result.color.a = lerpf(a.color.a, b.color.a, t);
+
+    return result;
+}
+
 Vertex vertex_where_clipped(Vertex v1, Vertex v2, float clipping_point) { 
     if (fabsf(v2.pos.z - v1.pos.z) < 1e-6f) {
         return v1;
     }
     float t = inv_lerpf(v1.pos.z, v2.pos.z, clipping_point);
     t = CLAMP(t, 0, 1);
-    Vertex wc = {0};
-    wc.pos.x = lerpf(v1.pos.x, v2.pos.x, t);
-    wc.pos.y = lerpf(v1.pos.y, v2.pos.y, t);
-    wc.pos.z = clipping_point;
-    return wc;
+    Vertex result = vertex_lerp(v1, v2, t);
+    result.pos.z = clipping_point;
+    return result;
 }
 
 
@@ -498,17 +510,17 @@ Vertex vertex_where_clipped(Vertex v1, Vertex v2, float clipping_point) {
 
 void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
     float scale_factor = 0.3;
-    static const Col debug_col[3] = {
-        {  0, 0, 255, 100 },
-        {  0, 0, 255, 200 },
-        {  0, 0, 255, 255 },
-    };
     // static const Col debug_col[3] = {
-    //     {  60, 130, 120, 255 },
-    //     { 120,  70, 140, 255 },
-    //     { 140, 120,  60, 255 },
+    //     {  0, 0, 255, 100 },
+    //     {  0, 0, 255, 200 },
+    //     {  0, 0, 255, 255 },
     // };
-    for (int i = 0; i < obj->mesh->face_idx.count - 2; i += 3) {
+    static const Col debug_col[3] = {
+        {  60, 130, 120, 255 },
+        { 120,  70, 140, 255 },
+        { 140, 120,  60, 255 },
+    };
+    for (int i = 0; i + 2 < obj->mesh->face_idx.count; i += 3) {
         Vertex unclipped_vs[3] = {0};
         Vertex clipped_vs[3]   = {0};
         size_t unclipped_vs_count = 0;
@@ -518,6 +530,7 @@ void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
             Vertex v = obj->mesh->vertices.items[obj->mesh->face_idx.items[i+o]];
             v.pos = vector_apply_xform(v.pos, obj->transform);
             v = camera_project(c, v);
+            v.color = debug_col[o];
             if (is_vector_clipped_by_near(v.pos, c)) {
                 clipped_vs[clipped_vs_count++] = v;
             } else {
@@ -535,9 +548,6 @@ void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
                             vrs[o] = screen_vertex_project(s, c, unclipped_vs[o]);
                             ASSERT(vrs[o].ok);
                         } 
-                        vrs[0].v.color = debug_col[0];
-                        vrs[1].v.color = debug_col[1];
-                        vrs[2].v.color = debug_col[2];
                         if (is_triangle_front(vrs[1].v.pos, vrs[0].v.pos, vrs[2].v.pos)) {
                             screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
                         }
@@ -556,23 +566,17 @@ void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
                         vrs1[1] = screen_vertex_project(s, c, nv1);
                         vrs1[2] = screen_vertex_project(s, c, nv2);
 
-                        vrs1[0].v.color = debug_col[0];
-                        vrs1[1].v.color = debug_col[1];
-                        vrs1[2].v.color = debug_col[2];
-
-
-
                         vrs2[0] = screen_vertex_project(s, c, nv2);
                         vrs2[1] = screen_vertex_project(s, c, unclipped_vs[1]);
                         vrs2[2] = screen_vertex_project(s, c, unclipped_vs[0]);
 
-                        vrs2[0].v.color = debug_col[0];
-                        vrs2[1].v.color = debug_col[1]; 
-                        vrs2[2].v.color = debug_col[2];
+                        // unculled version
+                        // screen_draw_triangle(s, vrs1[0].v, vrs1[1].v, vrs1[2].v);
+                        // screen_draw_triangle(s, vrs2[0].v, vrs2[1].v, vrs2[2].v);
 
-                        // not culling clipped triangles
-                        screen_draw_triangle(s, vrs1[0].v, vrs1[1].v, vrs1[2].v);
-                        screen_draw_triangle(s, vrs2[0].v, vrs2[1].v, vrs2[2].v);
+                        // culled version 
+                        screen_draw_triangle(s, vrs1[0].v, vrs1[2].v, vrs1[1].v);
+                        screen_draw_triangle(s, vrs2[0].v, vrs2[2].v, vrs2[1].v);
                     } break;
             case 2: {
                         ASSERT(unclipped_vs_count == 1);
@@ -587,27 +591,27 @@ void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
                         vrs[1] = screen_vertex_project(s, c, nv1);
                         vrs[2] = screen_vertex_project(s, c, nv2);
 
-                        vrs[0].v.color = debug_col[0];
-                        vrs[1].v.color = debug_col[1];
-                        vrs[2].v.color = debug_col[2];
+                        // unculled version
+                        // screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
 
-
-                        // not culling clipped triangle
-                        screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
+                        // culled version
+                        screen_draw_triangle(s, vrs[0].v, vrs[2].v, vrs[1].v);
                     } break;
             case 3: break;
         }
     }
 }
 
+
 void screen_draw_obj_points(Screen* s, const Cam* c, Object* obj) {
     for (int i = 0; i < obj->mesh->vertices.count; i++) {
         Vertex v = obj->mesh->vertices.items[i];
+        v.pos = vector_apply_xform(v.pos, obj->transform);
         v = camera_project(c, v);
 
         Vertex_Result rv = screen_vertex_project(s, c, (Vertex){.pos = v.pos, .color = v.color});
-#define PT_SIZE 10
-        if (rv.ok) screen_draw_rect(s, rv.v.pos.x, rv.v.pos.y, PT_SIZE, PT_SIZE, 0xffffffff);
+#define PT_SIZE 1
+        if (rv.ok) screen_draw_rect(s, rv.v.pos.x, rv.v.pos.y, PT_SIZE, PT_SIZE, 0xdddddddd);
     }
 }
 
@@ -820,7 +824,7 @@ bool mesh_load_from_objfile(char* obj_path, Model_Mesh* mesh) {
             printf("ERROR: Could not find file `%s` to read\n", mtl_lib_fp.data);
         } else {
             printf("%s\n", mtl_lib_f);
-            Parser mp = parser_new_from_cstr(content);
+            Parser mp = parser_new_from_cstr(mtl_lib_f);
             String_View tok;
             while (p.ptr < p.content.len) {
                 if (sv_cmp_cstr(tok, "map_Kd")) {
