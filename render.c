@@ -570,13 +570,8 @@ void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
                         vrs2[1] = screen_vertex_project(s, c, unclipped_vs[1]);
                         vrs2[2] = screen_vertex_project(s, c, unclipped_vs[0]);
 
-                        // unculled version
-                        // screen_draw_triangle(s, vrs1[0].v, vrs1[1].v, vrs1[2].v);
-                        // screen_draw_triangle(s, vrs2[0].v, vrs2[1].v, vrs2[2].v);
-
-                        // culled version 
-                        screen_draw_triangle(s, vrs1[0].v, vrs1[2].v, vrs1[1].v);
-                        screen_draw_triangle(s, vrs2[0].v, vrs2[2].v, vrs2[1].v);
+                        screen_draw_triangle(s, vrs1[0].v, vrs1[1].v, vrs1[2].v);
+                        screen_draw_triangle(s, vrs2[0].v, vrs2[1].v, vrs2[2].v);
                     } break;
             case 2: {
                         ASSERT(unclipped_vs_count == 1);
@@ -591,11 +586,7 @@ void screen_draw_obj(Screen* s, Cam* c, Object* obj) {
                         vrs[1] = screen_vertex_project(s, c, nv1);
                         vrs[2] = screen_vertex_project(s, c, nv2);
 
-                        // unculled version
-                        // screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
-
-                        // culled version
-                        screen_draw_triangle(s, vrs[0].v, vrs[2].v, vrs[1].v);
+                        screen_draw_triangle(s, vrs[0].v, vrs[1].v, vrs[2].v);
                     } break;
             case 3: break;
         }

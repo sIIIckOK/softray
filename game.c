@@ -182,6 +182,7 @@ void game_init(Core_Data* core, Data_Struct* ds) {
     ds->monkey.transform.scale = (Vec3) {1, 1, 1};
     ds->monkey.transform.pos   = (Vec3) {0, 0, 4};
     ds->monkey.transform.rot.y += MATH_PI;
+
 }
 
 void depth_buffer_clear(Screen* s) {
@@ -202,7 +203,7 @@ void game_update(Screen* s, Core_Data* core, Data_Struct* ds) {
     #define SPIN_SPEED (MATH_PI)
 
     // ds->teapot.transform.rot.y += SPIN_SPEED * core->dt;
-    ds->sword.transform.rot.y += SPIN_SPEED * core->dt;
+    // ds->sword.transform.rot.y += SPIN_SPEED * core->dt;
 
     float cam_speed = CAM_WALK_SPEED;
 
